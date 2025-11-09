@@ -96,7 +96,11 @@ namespace Base.API.Controllers
                     UserType = "ClincAdmin",
                     UserName = request.Email,
                     Email = request.Email,
-                    EmailConfirmed = true
+                    EmailConfirmed = true,
+                    ClincAdminProfile = new ClincAdminProfile()
+                    {
+                        ClincId = request.Id,
+                    }
                 };
 
                 var password = GeneratePassword();
@@ -104,6 +108,7 @@ namespace Base.API.Controllers
                 var result = await _userManager.CreateAsync(clincadminUser, password);
                 if (result.Succeeded)
                 {
+
                     await _userManager.AddToRoleAsync(clincadminUser, "ClincAdmin");
                     try
                     {
