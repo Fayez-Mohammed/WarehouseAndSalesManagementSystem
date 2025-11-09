@@ -36,6 +36,7 @@ namespace Base.API.Controllers
         }
 
         [HttpPost("clinc-request")]
+        [AllowAnonymous]
         public async Task<IActionResult> CreateClinic([FromBody] ClinicRegistrationDTO model)
         {
             if (!ModelState.IsValid)
