@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using RepositoryProject.Specifications;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -61,24 +62,25 @@ namespace Base.API.Controllers
         {
             var ClinicRepo = _unitOfWork.Repository<Clinic>();
             var spec = new BaseSpecification<Clinic>(c => c.Status.ToLower() == "pending");
+            spec.AllIncludes.Add(c => c.Include(_c => _c.MedicalSpecialty));
             var list = await ClinicRepo.ListAsync(spec);
-
+            var result = list.ToClinicDTOSet();
             if (!list.Any())
             {
                 throw new NotFoundException("No clinc requests are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Requests", list));
+            return Ok(new ApiResponseDTO(200, "All Requests", result));
         }
 
         [HttpPatch("approve-clinic-request")]
         [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> ApproveClinicsRequests([FromBody] string clincId)
         {
-
             if (string.IsNullOrEmpty(clincId)) throw new BadRequestException("clincId is required");
 
             var ClinicRepo = _unitOfWork.Repository<Clinic>();
             var spec = new BaseSpecification<Clinic>(c => c.Id == clincId);
+            spec.AllIncludes.Add(c => c.Include(_c => _c.MedicalSpecialty));
             var request = await ClinicRepo.GetEntityWithSpecAsync(spec);
 
             if (request is null) throw new NotFoundException("clincId not found");
@@ -221,6 +223,10 @@ namespace Base.API.Controllers
     {
         [Required]
         public string Name { get; set; } = string.Empty;
+
+        [Required]
+        public string MedicalSpecialtyId { get; set; } = string.Empty;
+
         [Required]
         [EmailAddress]
         public string Email { get; set; } = string.Empty;
@@ -230,6 +236,20 @@ namespace Base.API.Controllers
         public string? AddressLocation { get; set; }
         public string? Phone { get; set; }
         //public string Status { get; set; } = "pending";
+    }
+    public class ClinicDTO
+    {
+        public string? Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? MedicalSpecialtyId { get; set; } = string.Empty;
+        public string? MedicalSpecialtyName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string? AddressCountry { get; set; }
+        public string? AddressGovernRate { get; set; }
+        public string? AddressCity { get; set; }
+        public string? AddressLocation { get; set; }
+        public string? Phone { get; set; }
+        public string Status { get; set; } = "pending";
     }
     public static class ClinicExtensions
     {
@@ -243,6 +263,7 @@ namespace Base.API.Controllers
             return new Clinic
             {
                 Name = Dto.Name,
+                MedicalSpecialtyId = Dto.MedicalSpecialtyId,
                 Email = Dto.Email,
                 AddressCountry = Dto.AddressCountry,
                 AddressGovernRate = Dto.AddressGovernRate,
@@ -252,5 +273,35 @@ namespace Base.API.Controllers
                 Status = "pending",
             };
         }
+        public static ClinicDTO ToClinicDTO(this Clinic entity)
+        {
+            if (entity is null)
+            {
+                return new ClinicDTO();
+            }
+
+            return new ClinicDTO
+            {
+                Id = entity.Id,
+                Name = entity.Name,
+                MedicalSpecialtyId = entity.MedicalSpecialtyId,
+                MedicalSpecialtyName = entity.MedicalSpecialty?.Name ?? "NA",
+                Email = entity.Email,
+                AddressCountry = entity.AddressCountry,
+                AddressGovernRate = entity.AddressGovernRate,
+                AddressCity = entity.AddressCity,
+                AddressLocation = entity.AddressLocation,
+                Phone = entity.Phone,
+                Status = entity.Status,
+            };
+        }
+        public static HashSet<ClinicDTO> ToClinicDTOSet(this IEnumerable<Clinic> entities)
+        {
+            if (entities == null)
+                return new HashSet<ClinicDTO>();
+
+            return entities.Select(e => e.ToClinicDTO()).ToHashSet();
+        }
+
     }
 }
