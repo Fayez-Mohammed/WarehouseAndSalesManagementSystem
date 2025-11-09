@@ -1,0 +1,91 @@
+﻿using Base.DAL.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Base.DAL.Contexts
+{
+    public class AppDbContext : IdentityDbContext<ApplicationUser>
+    {
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+        public AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor httpContextAccessor) : base(options)
+        {
+            _httpContextAccessor = httpContextAccessor;
+        }
+        public DbSet<UserProfile> UserProfiles { get; set; }
+        public DbSet<MedicalSpecialty> MedicalSpecialties { get; set; }
+        public DbSet<UserType> UserTypes { get; set; }
+        public DbSet<ClincAdminProfile> ClincAdminProfiles { get; set; }
+        public DbSet<ClincDoctorProfile> ClincDoctorProfiles { get; set; }
+        public DbSet<ClincReceptionistProfile> ClincReceptionistProfiles { get; set; }
+        public DbSet<Clinic> Clinics { get; set; }
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+
+            //builder.Entity<ClincAdminProfile>().UseTpcMappingStrategy();
+            //builder.Entity<ClincDoctorProfile>().UseTpcMappingStrategy();
+            //builder.Entity<ClincReceptionistProfile>().UseTpcMappingStrategy();
+
+            builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+        }
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            string? _userId = null;
+            if (_httpContextAccessor.HttpContext is not null)
+            {
+                var reqservices = _httpContextAccessor.HttpContext.RequestServices;
+                if (reqservices is not null)
+                    using (var scope = reqservices.CreateScope())
+                    {
+                        var services = scope.ServiceProvider;
+                        if (services is not null)
+                            try
+                            {
+                                var _userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+                                if (_httpContextAccessor.HttpContext.User.Identity.IsAuthenticated)
+                                {
+                                    var user = _userManager.GetUserAsync(_httpContextAccessor.HttpContext.User).Result;
+                                    _userId = user?.Id;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+
+                            }
+                    }
+            }
+
+            var entries = ChangeTracker
+                .Entries()
+                .Where(e => e.Entity is BaseEntity && (
+                        e.State == EntityState.Added
+                        || e.State == EntityState.Modified));
+
+            foreach (var entityEntry in entries)
+            {
+                ((BaseEntity)entityEntry.Entity).DateOfUpdate = DateTime.Now;
+                ((BaseEntity)entityEntry.Entity).UpdatedById = _userId;
+
+                if (entityEntry.State == EntityState.Added)
+                {
+                    ((BaseEntity)entityEntry.Entity).DateOfCreattion = DateTime.Now;
+                    ((BaseEntity)entityEntry.Entity).CreatedById = _userId;
+                }
+            }
+
+            return base.SaveChangesAsync(cancellationToken);
+        }
+    
+    }
+}
