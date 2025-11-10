@@ -86,43 +86,48 @@ namespace Base.API.Controllers
 
             if (request is null) throw new NotFoundException("clincId not found");
             request.Status = "active";
+            await ClinicRepo.UpdateAsync(request);
 
-            // ✅ تحقق لو الأدمن مش 
-            var clincadminUser = await _userManager.FindByEmailAsync(request.Email);
-            if (clincadminUser == null)
+            if (await _unitOfWork.CompleteAsync() > 0)
             {
-                clincadminUser = new ApplicationUser
+                // ✅ تحقق لو الأدمن مش 
+                var clincadminUser = await _userManager.FindByEmailAsync(request.Email);
+                if (clincadminUser == null)
                 {
-                    FullName = request.Name,
-                    UserType = "ClincAdmin",
-                    UserName = request.Email,
-                    Email = request.Email,
-                    EmailConfirmed = true,
-                    ClincAdminProfile = new ClincAdminProfile()
+                    clincadminUser = new ApplicationUser
                     {
-                        ClincId = request.Id,
-                    }
-                };
+                        FullName = request.Name,
+                        UserType = "ClincAdmin",
+                        UserName = request.Email,
+                        Email = request.Email,
+                        EmailConfirmed = true,
+                        ClincAdminProfile = new ClincAdminProfile()
+                        {
+                            ClincId = request.Id,
+                        }
+                    };
 
-                var password = GeneratePassword();
+                    var password = GeneratePassword();
 
-                var result = await _userManager.CreateAsync(clincadminUser, password);
-                if (result.Succeeded)
-                {
-
-                    await _userManager.AddToRoleAsync(clincadminUser, "ClincAdmin");
-                    try
+                    var result = await _userManager.CreateAsync(clincadminUser, password);
+                    if (result.Succeeded)
                     {
-                        await _emailSender.SendEmailAsync(request.Email, "clinc Add Request Acceptance",
-                            ApproveClinicsRequestsMail(request.Name, request.Email, password));
+
+                        await _userManager.AddToRoleAsync(clincadminUser, "ClincAdmin");
+                        try
+                        {
+                            await _emailSender.SendEmailAsync(request.Email, "clinc Add Request Acceptance",
+                                ApproveClinicsRequestsMail(request.Name, request.Email, password));
+                        }
+                        catch (Exception ex)
+                        {
+                            throw new BadRequestException("Failed to send mail");
+                        }
+                        return Ok(new ApiResponseDTO(200, "Clinc Now Available in System"));
                     }
-                    catch (Exception ex)
-                    {
-                        throw new BadRequestException("Failed to send mail");
-                    }
-                    return Ok(new ApiResponseDTO(200, "Clinc Now Available in System"));
                 }
             }
+
             throw new BadRequestException("Failed to Approve Clinc Request");
         }
 
