@@ -17,8 +17,9 @@ namespace Base.Shared.DTOs
         public bool RequiresOtpVerification { get; set; } = false;
         public bool EmailConfirmed { get; set; } = false;
         public string Message { get; set; }
-
-        public LoginResponse? Data { get; set; }
+        public string Token { get; set; }
+        public object user { get; set; }
+        //public LoginResponse? Data { get; set; }
     }
 
     public class LoginResponse

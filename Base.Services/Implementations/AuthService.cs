@@ -91,8 +91,9 @@ namespace Base.Services.Implementations
                 }
                 return new LoginResult
                 {
-                    Success = false,
-                    EmailConfirmed = false,
+                    Success = true,
+                    RequiresOtpVerification = user.TwoFactorEnabled,
+                    EmailConfirmed = user.EmailConfirmed,
                     Message = "Your account is not confirmed. A new confirmation email has been sent."
                 };
             }
@@ -113,8 +114,8 @@ namespace Base.Services.Implementations
                     return new LoginResult
                     {
                         Success = true,
-                        EmailConfirmed = true,
-                        RequiresOtpVerification = true,
+                        RequiresOtpVerification = user.TwoFactorEnabled,
+                        EmailConfirmed = user.EmailConfirmed,
                         Message = "Credentials accepted. A One-Time Password (OTP) has been sent to your email."
                     };
                 }
@@ -144,20 +145,19 @@ namespace Base.Services.Implementations
                 return new LoginResult
                 {
                     Success = true,
-                    EmailConfirmed = true,
-                    RequiresOtpVerification = false,
                     Message = "Login successful.",
-                    Data = new LoginResponse
+                    RequiresOtpVerification = user.TwoFactorEnabled,
+                    EmailConfirmed = user.EmailConfirmed,
+                    Token = token,
+                    user = new
                     {
-                        Token = token,
-                        user = new
-                        {
-                            user.Id,
-                            user.UserName,
-                            user.Email,
-                            Roles = roles
-                        }
+                        user.Id,
+                        user.UserName,
+                        user.Email,
+                        user.UserType,
+                        Roles = roles
                     }
+
                 };
             }
         }
@@ -200,18 +200,18 @@ namespace Base.Services.Implementations
                 return new LoginResult
                 {
                     Success = true,
-                    RequiresOtpVerification = false,
                     Message = "Login successful.",
-                    Data = new LoginResponse
+                    RequiresOtpVerification = user.TwoFactorEnabled,
+                    EmailConfirmed = user.EmailConfirmed,
+                    Token = token,
+                    user = new
                     {
-                        Token = token,
-                        user = new
-                        {
-                            user.Id,
-                            user.UserName,
-                            user.Email,
-                            Roles = roles
-                        }
+                        user.Id,
+                        user.UserName,
+                        user.Email,
+                        user.UserType,
+                        Roles = roles
+
                     }
                 };
             }
@@ -758,7 +758,7 @@ namespace Base.Services.Implementations
         private async Task AssignUserRoleAsync(ApplicationUser user)
         {
             // ملاحظة: يُفضل نقل هذه الدالة المساعدة إلى مكان يُنفذ مرة واحدة عند بدء التشغيل (Seeding).
-            //await EnsureDefaultRoleExistsAsync(DefaultRole);
+            await EnsureDefaultRoleExistsAsync(DefaultRole);
 
             // 1. تعيين الدور للمستخدم
             var roleResult = await _userManager.AddToRoleAsync(user, DefaultRole);
@@ -780,21 +780,21 @@ namespace Base.Services.Implementations
         /// <param name="roleName">اسم الدور.</param>
         private async Task EnsureDefaultRoleExistsAsync(string roleName)
         {
-            if (await _roleManager.Roles.AnyAsync(r => r.Name == roleName))
-                if (!await _roleManager.RoleExistsAsync(roleName))
+            //if (await _roleManager.Roles.AnyAsync(r => r.Name == roleName))
+            if (!await _roleManager.RoleExistsAsync(roleName))
+            {
+                var role = new IdentityRole(roleName);
+                var createRoleResult = await _roleManager.CreateAsync(role);
+                if (createRoleResult is null) throw new InternalServerException($"CRITICAL: Failed to create default role '{roleName}'.");
+                if (!createRoleResult.Succeeded)
                 {
-                    var role = new IdentityRole(roleName);
-                    var createRoleResult = await _roleManager.CreateAsync(role);
-                    if (createRoleResult is null) throw new InternalServerException($"CRITICAL: Failed to create default role '{roleName}'.");
-                    if (!createRoleResult.Succeeded)
-                    {
-                        var errors = string.Join("; ", createRoleResult.Errors.Select(e => e.Description));
-                        _logger.LogCritical("CRITICAL: Failed to create essential default role '{Role}'. Details: {Errors}", roleName, errors);
+                    var errors = string.Join("; ", createRoleResult.Errors.Select(e => e.Description));
+                    _logger.LogCritical("CRITICAL: Failed to create essential default role '{Role}'. Details: {Errors}", roleName, errors);
 
-                        // يجب رمي استثناء داخلي يمنع استمرار العملية إذا فشل إنشاء دور أساسي
-                        throw new InternalServerException($"CRITICAL: Failed to create default role '{roleName}'. Details: {errors}");
-                    }
+                    // يجب رمي استثناء داخلي يمنع استمرار العملية إذا فشل إنشاء دور أساسي
+                    throw new InternalServerException($"CRITICAL: Failed to create default role '{roleName}'. Details: {errors}");
                 }
+            }
         }
 
         /// <summary>

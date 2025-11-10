@@ -43,6 +43,22 @@ namespace Base.API.Controllers
         /// An unexpected internal error occurred during login.
         /// </exception>
         [HttpPost("login")]
+        //// 🟢 الحالة الناجحة (تم إصدار التوكن)
+        //[ProducesResponseType(typeof(LoginResult), StatusCodes.Status200OK)]
+        //// ⚠️ الحالات التي تتطلب إجراء إضافي (OTP أو تأكيد إيميل)
+        //[ProducesResponseType(typeof(LoginResult), StatusCodes.Status202Accepted)]
+        //// 🛑 بيانات اعتماد غير صالحة
+        //[ProducesResponseType(typeof(LoginResult), StatusCodes.Status401Unauthorized)]
+        //// 🚫 الحساب مقفل
+        //[ProducesResponseType(typeof(LoginResult), StatusCodes.Status403Forbidden)]
+        //// 💥 أخطاء داخلية (فشل إرسال OTP/توليد توكن)
+        //[ProducesResponseType(typeof(LoginResult), StatusCodes.Status500InternalServerError)]
+        //[ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)] // 👈 يحدد شكل الاستجابة
+        //[ProducesResponseType((int)HttpStatusCode.BadRequest)]
+        //[ProducesResponseType((int)HttpStatusCode.NotFound)]
+        //[ProducesResponseType((int)HttpStatusCode.Unauthorized)]
+        //[ProducesResponseType((int)HttpStatusCode.Forbidden)]
+        //[ProducesResponseType((int)HttpStatusCode.InternalServerError)]
         public async Task<IActionResult> Login([FromBody] LoginDTO model)
         {
             // 1. Model State Validation 
@@ -63,17 +79,22 @@ namespace Base.API.Controllers
                     // حالة الفشل (بيانات خاطئة، إيميل غير مؤكد، حساب مقفل)
                     throw new UnauthorizedException(result.Message); // 401 Unauthorized
                 }
+                if (!result.EmailConfirmed)
+                {
+                    // نجاح جزئي: يتطلب التحقق من OTP
+                    return Ok(new ApiResponseDTO(202, null, result));
+                }
 
                 if (result.RequiresOtpVerification)
                 {
                     // نجاح جزئي: يتطلب التحقق من OTP
-                    return Ok(new ApiResponseDTO(202, result.Message));
+                    return Ok(new ApiResponseDTO(202, null, result));
                 }
 
                 // نجاح تام (تم إرجاع التوكن مباشرة لأن 2FA غير مفعل)
-                if (result.Data != null)
+                if (!string.IsNullOrEmpty(result.Token) && result.user is not null)
                 {
-                    return Ok(new ApiResponseDTO(200, "Token", result.Data));
+                    return Ok(new ApiResponseDTO(200, null, result));
                 }
 
                 // حالة غير متوقعة (فشل توليد التوكن داخل الخدمة)
@@ -125,7 +146,7 @@ namespace Base.API.Controllers
 
                 // نجاح تام بعد التحقق من OTP
                 // بما أن result.Success = true, يجب أن يكون result.Data != null
-                return Ok(new ApiResponseDTO(200, "Token and User info", result.Data)); // 200 OK (Data contains Token and User info)
+                return Ok(new ApiResponseDTO(200, "Token and User info", result)); // 200 OK (Data contains Token and User info)
 
             }
             catch (InvalidOperationException ex)
