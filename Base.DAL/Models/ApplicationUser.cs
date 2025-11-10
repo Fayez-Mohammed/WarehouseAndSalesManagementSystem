@@ -11,11 +11,11 @@ namespace Base.DAL.Models
     {
         public string FullName { get; set; }
         public string UserType { get; set; }
-        public UserProfile? Profile { get; set; }
-        public SystemAdminProfile? SystemAdminProfile { get; set; }
-        public ClincAdminProfile? ClincAdminProfile { get; set; }
-        public ClincDoctorProfile? ClincDoctorProfile { get; set; }
-        public ClincReceptionistProfile? ClincReceptionistProfile { get; set; }
+        public virtual UserProfile? Profile { get; set; }
+        public virtual SystemAdminProfile? SystemAdminProfile { get; set; }
+        public virtual ClincAdminProfile? ClincAdminProfile { get; set; }
+        public virtual ClincDoctorProfile? ClincDoctorProfile { get; set; }
+        public virtual ClincReceptionistProfile? ClincReceptionistProfile { get; set; }
 
     }
 }

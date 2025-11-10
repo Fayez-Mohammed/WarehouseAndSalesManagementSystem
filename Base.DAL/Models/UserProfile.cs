@@ -15,6 +15,6 @@ namespace Base.DAL.Models
         public string? PhoneNumber { get; set; }
 
         // Navigation property
-        public ApplicationUser? User { get; set; }
+        public virtual ApplicationUser? User { get; set; }
     }
 }

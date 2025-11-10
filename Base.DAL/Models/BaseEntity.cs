@@ -11,11 +11,11 @@ namespace Base.DAL.Models
     {
         public string Id { get; set; }
         public string? CreatedById { get; set; }
-        public ApplicationUser? CreatedBy { get; set; }
+        public virtual ApplicationUser? CreatedBy { get; set; }
         public DateTime DateOfCreattion { get; set; }
 
         public string? UpdatedById { get; set; }
-        public ApplicationUser? UpdatedBy { get; set; }
+        public virtual ApplicationUser? UpdatedBy { get; set; }
         public DateTime DateOfUpdate { get; set; }
         public BaseEntity()
         {

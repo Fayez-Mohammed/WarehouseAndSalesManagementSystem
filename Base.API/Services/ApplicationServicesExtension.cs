@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Text.Json;
@@ -23,10 +24,14 @@ namespace Base.API.Services
     {
         public static IServiceCollection AddApplicationservices(this IServiceCollection services, IConfiguration _configuration)
         {
+
             #region Configure services
             // 1️⃣ ربط DbContext من DAL مع SQL Server
-            services.AddDbContext<AppDbContext>(options =>
-                options.UseSqlServer(_configuration.GetConnectionString("DefaultConnection")));
+            services.AddDbContext<AppDbContext>(options => {
+                options.UseLazyLoadingProxies();
+                options.UseSqlServer(_configuration.GetConnectionString("DefaultConnection"));
+                
+                });
 
             // 2️⃣ إعداد Identity
             services.AddIdentity<ApplicationUser, IdentityRole>(options =>
