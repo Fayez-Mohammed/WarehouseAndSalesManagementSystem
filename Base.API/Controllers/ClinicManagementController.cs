@@ -274,9 +274,32 @@ namespace Base.API.Controllers
             var list = (await Repo.ListAsync(spec)).Select(e => new { e.DoctorId, e.Day, e.StartTime, e.EndTime });
             if (!list.Any())
             {
-                throw new NotFoundException("No User Types are currently defined in the system.");
+                throw new NotFoundException("No Clinic Schedule are currently defined in the system.");
             }
             return Ok(new ApiResponseDTO(200, "All Clinic Schedule ", list));
+        }
+
+        [HttpGet("clinic-AppointmentSlots")]
+        public async Task<IActionResult> GetAppointmentSlots([FromBody] bool IsBooked)
+        {
+            var currentuser = await _userManager.GetUserAsync(User);
+            if (currentuser is null) throw new NotFoundException("Not Found user");
+
+            var userspec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == currentuser.Id);
+            var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
+            var ClinicId = (await userrepository.GetEntityWithSpecAsync(userspec)).ClincId;
+            if (string.IsNullOrEmpty(ClinicId))
+            {
+                throw new NotFoundException("Not Available Clinic for Current User");
+            }
+            var Repo = _unitOfWork.Repository<AppointmentSlot>();
+            var spec = new BaseSpecification<AppointmentSlot>(e=>e.IsBooked == IsBooked);
+            var list = (await Repo.ListAsync(spec)).Select(e => new { e.Date, e.StartTime, e.EndTime });
+            if (!list.Any())
+            {
+                throw new NotFoundException("No Appointments are currently defined in the system.");
+            }
+            return Ok(new ApiResponseDTO(200, "All Appointments", list));
         }
     }
     #region ClinicUser
