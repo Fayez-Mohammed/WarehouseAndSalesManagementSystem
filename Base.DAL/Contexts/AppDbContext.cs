@@ -29,6 +29,10 @@ namespace Base.DAL.Contexts
         public DbSet<ClincDoctorProfile> ClincDoctorProfiles { get; set; }
         public DbSet<ClincReceptionistProfile> ClincReceptionistProfiles { get; set; }
         public DbSet<Clinic> Clinics { get; set; }
+        public DbSet<ClinicSchedule> ClinicSchedule { get; set; }
+        public DbSet<AppointmentSlot> AppointmentSlot { get; set; }
+        public DbSet<Appointment> Appointment { get; set; }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
