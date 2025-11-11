@@ -37,6 +37,7 @@ namespace Base.Services.Implementations
         private readonly ILogger<AuthService> _logger;
         private readonly IConfiguration _config;
         private const string DefaultRole = "User";
+        private const string DefaultUserType = "User";
 
         public AuthService(
             UserManager<ApplicationUser> userManager,
@@ -669,6 +670,7 @@ namespace Base.Services.Implementations
             {
                 // 3. Mapping and Identity Creation
                 var user = MapAndCreateUser(model);
+                user.UserType = DefaultUserType;
 
                 // 4. Identity Creation - الآن نستخدم await بشكل صحيح
                 var createUserResult = await _userManager.CreateAsync(user, model.Password);

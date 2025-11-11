@@ -11,6 +11,7 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Base.API.Controllers
 {
+    [ApiExplorerSettings(IgnoreApi = true)]
     [ApiController]
     [Route("api/[controller]")]
     // 🔒 الإبقاء على الحماية لدور المدير هو أهم خطوة وقائية في هذا المتحكم

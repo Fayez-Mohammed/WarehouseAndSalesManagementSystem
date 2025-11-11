@@ -16,6 +16,12 @@ namespace Base.API.MiddleWare
 
         public async Task InvokeAsync(HttpContext context)
         {
+            // تخطي أي شيء يبدأ بـ /hangfire
+            if (context.Request.Path.StartsWithSegments("/hangfire"))
+            {
+                await _next(context);
+                return;
+            }
             var originalBodyStream = context.Response.Body;
             using var responseBody = new MemoryStream();
             context.Response.Body = responseBody;

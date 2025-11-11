@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 
 namespace Base.API.Controllers
 {
+    [ApiExplorerSettings(IgnoreApi = true)]
     [ApiController]
     [Route("api/[controller]")]
     // 🔒 الإبقاء على الحماية للمسؤولين لمنع أي مستخدم من إنشاء أدوار عشوائية

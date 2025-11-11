@@ -3,10 +3,13 @@ using Base.API.Services;
 using Base.DAL.Contexts;
 using Base.DAL.Models;
 using Base.DAL.Seeding;
+using Base.Services.Helpers;
 using Base.Services.Implementations;
+using Hangfire;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
+using TimeZoneConverter;
 internal class Program
 {
     private static async Task Main(string[] args)
@@ -83,6 +86,23 @@ internal class Program
         // 💡 إضافة Middleware لتغليف الاستجابات الناجحة
         app.UseMiddleware<SuccessResponseMiddleware>();
 
+        app.UseStaticFiles();
+        app.UseHangfireDashboard("/hangfire");
+
+        // Cairo timezone
+        var cairoTimeZone = TZConvert.GetTimeZoneInfo("Africa/Cairo");
+
+        // جدولة الـ Job اليومية
+        RecurringJob.AddOrUpdate<AppointmentSlotGeneratorJob>(
+            "GenerateAppointmentSlots",
+            job => job.GenerateMonthlySlotsAsync(),
+            "0 2 * * *",
+            new RecurringJobOptions
+            {
+                TimeZone = cairoTimeZone
+            }
+        );
+
         // 💡 تعيين الخرائط للمتحكمات
         app.MapControllers();
 
@@ -91,7 +111,8 @@ internal class Program
         {
             throw new NotFoundException("The requested endpoint does not exist.");
         });
-
+        // Hangfire dashboard
+     
         app.Run();
     }
 }

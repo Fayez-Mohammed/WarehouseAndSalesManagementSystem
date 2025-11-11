@@ -131,7 +131,8 @@ namespace Base.DAL.Seeding
             new UserType(){ Name = "SystemAdmin"},
             new UserType(){ Name = "ClincAdmin"},
             new UserType(){ Name = "ClincDoctor"},
-            new UserType(){ Name = "ClincReceptionis"}
+            new UserType(){ Name = "ClincReceptionis"},
+            new UserType(){ Name = "User"}
             };
         }
     }

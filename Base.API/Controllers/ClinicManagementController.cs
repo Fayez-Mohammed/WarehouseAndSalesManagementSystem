@@ -15,6 +15,7 @@ using RepositoryProject.Specifications;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
 using static System.Net.WebRequestMethods;
 
 namespace Base.API.Controllers
@@ -170,7 +171,7 @@ namespace Base.API.Controllers
             var result = allUsers
                 .GroupBy(u => u.Id)
                 .Select(g => g.First())
-                .ToList().Select(e=> new
+                .ToList().Select(e => new
                 {
                     e.Id,
                     e.FullName,
@@ -198,7 +199,87 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "All User Types", list));
         }
 
+        [HttpPost("create-doctor-schedule")]
+        public async Task<IActionResult> CreateDoctorSchedule([FromBody] DoctorScheduleDTO model)
+        {
+
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+                throw new BadRequestException(errors);
+            }
+            var existingUser = await _userManager.FindByIdAsync(model.DoctorId);
+            if (existingUser != null)
+                throw new BadRequestException("This doctor doesn't exist.");
+
+            var cuurentuser = await _userManager.GetUserAsync(User);
+            if (cuurentuser is null) throw new NotFoundException("Not Found user");
+
+            var spec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == cuurentuser.Id);
+            var userrepository =  _unitOfWork.Repository<ClincAdminProfile>();
+            model.ClinicId = (await userrepository.GetEntityWithSpecAsync(spec)).ClincId;
+            if (string.IsNullOrEmpty(model.ClinicId))
+            {
+                throw new NotFoundException("The specified clinic does not exist.");
+            }
+            
+            // 2. Transaction Setup (using statement ensures Dispose/Rollback on failure)
+            await using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                List<ClinicSchedule> Schedules;
+                try
+                {
+                    Schedules = model.ToDoctorSchedule();
+                }
+                catch (Exception ex)
+                {
+                    throw new BadRequestException("Clinic Schedule data format is invalid.");
+                }
+                var repo = _unitOfWork.Repository<ClinicSchedule>();
+                await repo.AddRangeAsync(Schedules);
+                if (await _unitOfWork.CompleteAsync() > 0)
+                {
+                    await transaction.CommitAsync();
+                    return Ok(new ApiResponseDTO(200, "Doctor Schedule added successfully."));
+                }
+                else
+                {
+                    await transaction.RollbackAsync();
+                    throw new InternalServerException("Database transaction failed to save changes.");
+                }
+            }
+            catch (Exception ex) when (ex is not BadRequestException)
+            {
+                await transaction.RollbackAsync();
+                throw new InternalServerException("An unexpected error occurred during registration. Please try again.");
+            }
+        }
+
+        [HttpGet("clinic-schedule")]
+        public async Task<IActionResult> GetClinicSchedule()
+        {
+            var cuurentuser = await _userManager.GetUserAsync(User);
+            if (cuurentuser is null) throw new NotFoundException("Not Found user");
+
+            var userspec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == cuurentuser.Id);
+            var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
+            var ClinicId = (await userrepository.GetEntityWithSpecAsync(userspec)).ClincId;
+            if (string.IsNullOrEmpty(ClinicId))
+            {
+                throw new NotFoundException("Not Available Clinic for Current User");
+            }
+            var Repo = _unitOfWork.Repository<ClinicSchedule>();
+            var spec = new BaseSpecification<ClinicSchedule>(e=>e.ClinicId == ClinicId);
+            var list = (await Repo.ListAsync(spec)).Select(e => new { e.DoctorId, e.Day, e.StartTime, e.EndTime });
+            if (!list.Any())
+            {
+                throw new NotFoundException("No User Types are currently defined in the system.");
+            }
+            return Ok(new ApiResponseDTO(200, "All Clinic Schedule ", list));
+        }
     }
+    #region ClinicUser
 
     public class ClinicUserDTO
     {
@@ -269,4 +350,53 @@ namespace Base.API.Controllers
             };
         }
     }
+
+    #endregion
+   
+    #region DoctorSchedule
+    public class DoctorScheduleDTO
+    {
+        public  string? ClinicId { get; set; }
+
+        [Required]
+        public required string DoctorId { get; set; }
+
+        [Required] 
+        public required int SlotDurationMinutes { get; set; }
+        public ICollection<SlotsDTO> slots { get; set; } = new List<SlotsDTO>();
+
+    }
+    public class SlotsDTO
+    {
+        [Required]
+        [EnumDataType(typeof(DayOfWeek), ErrorMessage = "Invalid day of the week.")]
+        public DayOfWeek Day { get; set; }
+        [Required]
+        public TimeSpan StartTime { get; set; }
+        [Required]
+        public TimeSpan EndTime { get; set; }
+    }
+    public static class DoctorScheduleExtentions
+    {
+        public static List<ClinicSchedule> ToDoctorSchedule(this DoctorScheduleDTO Dto)
+        {
+            if (Dto is null || Dto.slots == null || !Dto.slots.Any())
+            {
+                return new List<ClinicSchedule>();
+            }
+            // لكل slot نعمل ClinicSchedule جديد
+            var schedules = Dto.slots.Select(slot => new ClinicSchedule
+            {
+                ClinicId = Dto.ClinicId,
+                DoctorId = Dto.DoctorId,
+                SlotDurationMinutes = Dto.SlotDurationMinutes,
+                Day = slot.Day,
+                StartTime = slot.StartTime,
+                EndTime = slot.EndTime
+            }).ToList();
+
+            return schedules;
+        }
+    } 
+    #endregion
 }

@@ -17,7 +17,6 @@ namespace Base.Services.Helpers
             return new ApplicationUser
             {
                 FullName = Dto.FullName,
-                UserType = Dto.UserType,
                 UserName = Dto.Email,
                 Email = Dto.Email,
                 PhoneNumber = Dto.PhoneNumber

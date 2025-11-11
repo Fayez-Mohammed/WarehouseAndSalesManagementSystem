@@ -82,8 +82,8 @@ namespace Base.Tests.Services
 
             Assert.True(result.Success);
             Assert.Equal("Login successful.", result.Message);
-            Assert.NotNull(result.Data);
-            Assert.NotNull(result.Data.Token);
+            Assert.NotNull(result);
+            Assert.NotNull(result.Token);
         }
 
         [Fact]
@@ -196,7 +196,7 @@ namespace Base.Tests.Services
             var result = await _authService.VerifyLoginAsync(otpDto);
 
             Assert.True(result.Success);
-            Assert.NotNull(result.Data.Token);
+            Assert.NotNull(result.Token);
             Assert.False(result.RequiresOtpVerification);
             _otpServiceMock.Verify(x => x.RemoveOtpAsync(user.Email), Times.Once);
         }
@@ -213,7 +213,7 @@ namespace Base.Tests.Services
 
             Assert.False(result.Success);
             Assert.Equal("Invalid OTP. Please try again later.", result.Message);
-            Assert.Null(result.Data);
+            Assert.Null(result);
             _userManagerMock.Verify(x => x.FindByIdAsync(It.IsAny<string>()), Times.Never);
         }
 
@@ -245,7 +245,7 @@ namespace Base.Tests.Services
         public async Task RegisterAsync_ShouldSucceed_AndCommitTransaction()
         {
             // Arrange
-            var registerDto = new RegisterDTO { Email = "success@test.com", Password = "Password123!", FullName = "Test User" , UserType = "Test" };
+            var registerDto = new RegisterDTO { Email = "success@test.com", Password = "Password123!", FullName = "Test User" };
             var newUser = new ApplicationUser { Id = "123", Email = registerDto.Email };
 
             // Mock Mappers and Helpers to simulate success
@@ -304,7 +304,7 @@ namespace Base.Tests.Services
         public async Task RegisterAsync_ShouldRollback_WhenIdentityCreationFails()
         {
             // Arrange
-            var registerDto = new RegisterDTO { Email = "fail@test.com", Password = "Password123!" , FullName = "Test User", UserType = "Test" };
+            var registerDto = new RegisterDTO { Email = "fail@test.com", Password = "Password123!" , FullName = "Test User"};
             var errors = new IdentityError[] { new IdentityError { Description = "Password too short." } };
 
             _userManagerMock.Setup(x => x.FindByEmailAsync(registerDto.Email)).ReturnsAsync((ApplicationUser)null);
@@ -333,7 +333,7 @@ namespace Base.Tests.Services
         public async Task RegisterAsync_ShouldRollback_WhenDbCompleteFails()
         {
             // Arrange
-            var registerDto = new RegisterDTO { Email = "dbfail@test.com", Password = "Password123!" , FullName = "Test User", UserType = "Test" };
+            var registerDto = new RegisterDTO { Email = "dbfail@test.com", Password = "Password123!" , FullName = "Test User"};
             var newUser = new ApplicationUser { Id = "123", Email = registerDto.Email };
 
             _userManagerMock.Setup(x => x.FindByEmailAsync(registerDto.Email)).ReturnsAsync((ApplicationUser)null);
@@ -367,7 +367,7 @@ namespace Base.Tests.Services
         public async Task RegisterAsync_ShouldThrowBadRequest_WhenUserAlreadyExists()
         {
             // Arrange
-            var registerDto = new RegisterDTO { Email = "existing@test.com", Password = "Password123!" , FullName = "Test User", UserType = "Test" };
+            var registerDto = new RegisterDTO { Email = "existing@test.com", Password = "Password123!" , FullName = "Test User"};
             var existingUser = new ApplicationUser { Id = "456", Email = registerDto.Email };
 
             // User already exists

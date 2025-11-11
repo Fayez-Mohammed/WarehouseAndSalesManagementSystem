@@ -34,7 +34,15 @@ namespace Base.Repo.Implementations
             // 💡 لا يتم استدعاء SaveChangesAsync هنا. يفضل تركه لـ UnitOfWork.
             return entity;
         }
+        public async Task<IEnumerable<T>> AddRangeAsync(IEnumerable<T> entities)
+        {
+            if (entities == null || !entities.Any())
+                return Enumerable.Empty<T>();
 
+            await _dbSet.AddRangeAsync(entities);
+            // 💡 لا يتم استدعاء SaveChangesAsync هنا. يفضل تركه لـ UnitOfWork.
+            return entities;
+        }
         // 🟢 وقائي: تم تغيير الاسم من Update إلى UpdateAsync.
         public Task UpdateAsync(T entity)
         {

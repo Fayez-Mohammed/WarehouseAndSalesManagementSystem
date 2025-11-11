@@ -3,8 +3,10 @@ using Base.DAL.Contexts;
 using Base.DAL.Models;
 using Base.Repo.Implementations;
 using Base.Repo.Interfaces;
+using Base.Services.Helpers;
 using Base.Services.Implementations;
 using Base.Services.Interfaces;
+using Hangfire;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -17,6 +19,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Base.API.Services
 {
@@ -143,6 +146,7 @@ namespace Base.API.Services
             {
                 options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
                 options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             });
 
             services.AddEndpointsApiExplorer();
@@ -162,7 +166,13 @@ namespace Base.API.Services
                 // ✅ نربط كل أكشن بالـ response الفعلي بتاعه
                 options.OperationFilter<SwaggerResponseOperationFilter>();
             });
-
+            services.AddHangfire(config =>
+                                 config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+                    .UseSimpleAssemblyNameTypeSerializer()
+                    .UseRecommendedSerializerSettings()
+                    .UseSqlServerStorage(_configuration.GetConnectionString("DefaultConnection")));
+            services.AddHangfireServer();
+            services.AddScoped<AppointmentSlotGeneratorJob>();
             #endregion
             return services;
         }
