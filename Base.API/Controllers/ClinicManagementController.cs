@@ -23,22 +23,21 @@ namespace Base.API.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize(Roles = "ClincAdmin")]
-
-    public class ClinicManagementController : ControllerBase
+    public class ClincManagementController : ControllerBase
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IEmailSender _emailSender;
 
-        public ClinicManagementController(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager, IEmailSender emailSender)
+        public ClincManagementController(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager, IEmailSender emailSender)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
             _emailSender = emailSender;
         }
 
-        [HttpPost("create-clinic-user")]
-        public async Task<IActionResult> CreateClinicUser([FromBody] ClinicUserDTO model)
+        [HttpPost("create-Clinc-user")]
+        public async Task<IActionResult> CreateClincUser([FromBody] ClincUserDTO model)
         {
 
             if (!ModelState.IsValid)
@@ -98,7 +97,7 @@ namespace Base.API.Controllers
                 model.ClincId = (await userrepository.GetEntityWithSpecAsync(spec)).ClincId;
                 if (string.IsNullOrEmpty(model.ClincId))
                 {
-                    throw new NotFoundException("The specified clinic does not exist.");
+                    throw new NotFoundException("The specified Clinc does not exist.");
                 }
 
                 if (model.UserType == "ClincDoctor")
@@ -119,7 +118,7 @@ namespace Base.API.Controllers
                     await transaction.CommitAsync();
                     await _emailSender.SendEmailAsync(user.Email, "Registration Completed",
                $"<p>Your Password is: <b>{model.Password}</b>");
-                    return Ok(new ApiResponseDTO(201, "Clinic user registered successfully.", null));
+                    return Ok(new ApiResponseDTO(201, "Clinc user registered successfully.", null));
                 }
                 else
                 {
@@ -135,12 +134,12 @@ namespace Base.API.Controllers
         }
 
         [HttpGet("Doctors")]
-        public async Task<IActionResult> GetClinicDoctors()
+        public async Task<IActionResult> GetClincDoctors()
         {
-            var ClinicRepo = _unitOfWork.Repository<ClincDoctorProfile>();
+            var ClincRepo = _unitOfWork.Repository<ClincDoctorProfile>();
 
             var spec = new BaseSpecification<ClincDoctorProfile>();
-            var list = (await ClinicRepo.ListAsync(spec))
+            var list = (await ClincRepo.ListAsync(spec))
                 .Select(e => new
                 {
                     e.Id,
@@ -151,13 +150,13 @@ namespace Base.API.Controllers
 
             if (!list.Any())
             {
-                throw new NotFoundException("No clinc requests are currently defined in the system.");
+                throw new NotFoundException("No Clinc requests are currently defined in the system.");
             }
             return Ok(new ApiResponseDTO(200, "All Doctors", list));
         }
 
-        [HttpGet("clinic-users")]
-        public async Task<IActionResult> GetClinicusers()
+        [HttpGet("Clinc-users")]
+        public async Task<IActionResult> GetClincusers()
         {
             var roles = new[] { "ClincDoctor", "ClincReceptionis" };
             var allUsers = new List<ApplicationUser>();
@@ -181,9 +180,9 @@ namespace Base.API.Controllers
 
             if (!result.Any())
             {
-                throw new NotFoundException("No clinc requests are currently defined in the system.");
+                throw new NotFoundException("No Clinc requests are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Clinic Users", result));
+            return Ok(new ApiResponseDTO(200, "All Clinc Users", result));
         }
 
         [HttpGet("user-types")]
@@ -217,10 +216,10 @@ namespace Base.API.Controllers
 
             var spec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == cuurentuser.Id);
             var userrepository =  _unitOfWork.Repository<ClincAdminProfile>();
-            model.ClinicId = (await userrepository.GetEntityWithSpecAsync(spec)).ClincId;
-            if (string.IsNullOrEmpty(model.ClinicId))
+            model.ClincId = (await userrepository.GetEntityWithSpecAsync(spec)).ClincId;
+            if (string.IsNullOrEmpty(model.ClincId))
             {
-                throw new NotFoundException("The specified clinic does not exist.");
+                throw new NotFoundException("The specified Clinc does not exist.");
             }
             
             // 2. Transaction Setup (using statement ensures Dispose/Rollback on failure)
@@ -234,7 +233,7 @@ namespace Base.API.Controllers
                 }
                 catch (Exception ex)
                 {
-                    throw new BadRequestException("Clinic Schedule data format is invalid.");
+                    throw new BadRequestException("Clinc Schedule data format is invalid.");
                 }
                 var repo = _unitOfWork.Repository<ClinicSchedule>();
                 await repo.AddRangeAsync(Schedules);
@@ -256,30 +255,30 @@ namespace Base.API.Controllers
             }
         }
 
-        [HttpGet("clinic-schedule")]
-        public async Task<IActionResult> GetClinicSchedule()
+        [HttpGet("Clinc-schedule")]
+        public async Task<IActionResult> GetClincSchedule()
         {
             var cuurentuser = await _userManager.GetUserAsync(User);
             if (cuurentuser is null) throw new NotFoundException("Not Found user");
 
             var userspec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == cuurentuser.Id);
             var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
-            var ClinicId = (await userrepository.GetEntityWithSpecAsync(userspec)).ClincId;
-            if (string.IsNullOrEmpty(ClinicId))
+            var ClincId = (await userrepository.GetEntityWithSpecAsync(userspec)).ClincId;
+            if (string.IsNullOrEmpty(ClincId))
             {
-                throw new NotFoundException("Not Available Clinic for Current User");
+                throw new NotFoundException("Not Available Clinc for Current User");
             }
             var Repo = _unitOfWork.Repository<ClinicSchedule>();
-            var spec = new BaseSpecification<ClinicSchedule>(e=>e.ClinicId == ClinicId);
+            var spec = new BaseSpecification<ClinicSchedule>(e=>e.ClinicId == ClincId);
             var list = (await Repo.ListAsync(spec)).Select(e => new { e.DoctorId, e.Day, e.StartTime, e.EndTime });
             if (!list.Any())
             {
-                throw new NotFoundException("No Clinic Schedule are currently defined in the system.");
+                throw new NotFoundException("No Clinc Schedule are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Clinic Schedule ", list));
+            return Ok(new ApiResponseDTO(200, "All Clinc Schedule ", list));
         }
 
-        [HttpGet("clinic-AppointmentSlots")]
+        [HttpGet("Clinc-AppointmentSlots")]
         public async Task<IActionResult> GetAppointmentSlots([FromBody] bool IsBooked)
         {
             var currentuser = await _userManager.GetUserAsync(User);
@@ -287,10 +286,10 @@ namespace Base.API.Controllers
 
             var userspec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == currentuser.Id);
             var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
-            var ClinicId = (await userrepository.GetEntityWithSpecAsync(userspec)).ClincId;
-            if (string.IsNullOrEmpty(ClinicId))
+            var ClincId = (await userrepository.GetEntityWithSpecAsync(userspec)).ClincId;
+            if (string.IsNullOrEmpty(ClincId))
             {
-                throw new NotFoundException("Not Available Clinic for Current User");
+                throw new NotFoundException("Not Available Clinc for Current User");
             }
             var Repo = _unitOfWork.Repository<AppointmentSlot>();
             var spec = new BaseSpecification<AppointmentSlot>(e=>e.IsBooked == IsBooked);
@@ -302,9 +301,9 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "All Appointments", list));
         }
     }
-    #region ClinicUser
+    #region ClincUser
 
-    public class ClinicUserDTO
+    public class ClincUserDTO
     {
         [Required]
         [EmailAddress]
@@ -324,13 +323,13 @@ namespace Base.API.Controllers
 
         public string? ClincId { get; set; }
 
-        //public Clinic? Clinc { get; set; }
+        //public Clinc? Clinc { get; set; }
 
     }
 
-    public static class ClinicUserExtensions
+    public static class ClincUserExtensions
     {
-        public static ApplicationUser ToUser(this ClinicUserDTO Dto)
+        public static ApplicationUser ToUser(this ClincUserDTO Dto)
         {
             if (Dto is null)
             {
@@ -346,7 +345,7 @@ namespace Base.API.Controllers
             };
         }
 
-        public static ClincDoctorProfile ToClincDoctor(this ClinicUserDTO Dto)
+        public static ClincDoctorProfile ToClincDoctor(this ClincUserDTO Dto)
         {
             if (Dto is null)
             {
@@ -359,7 +358,7 @@ namespace Base.API.Controllers
                 ClincId = Dto.ClincId
             };
         }
-        public static ClincReceptionistProfile ToClincReceptionist(this ClinicUserDTO Dto)
+        public static ClincReceptionistProfile ToClincReceptionist(this ClincUserDTO Dto)
         {
             if (Dto is null)
             {
@@ -379,7 +378,7 @@ namespace Base.API.Controllers
     #region DoctorSchedule
     public class DoctorScheduleDTO
     {
-        public  string? ClinicId { get; set; }
+        public  string? ClincId { get; set; }
 
         [Required]
         public required string DoctorId { get; set; }
@@ -407,10 +406,10 @@ namespace Base.API.Controllers
             {
                 return new List<ClinicSchedule>();
             }
-            // لكل slot نعمل ClinicSchedule جديد
+            // لكل slot نعمل ClincSchedule جديد
             var schedules = Dto.slots.Select(slot => new ClinicSchedule
             {
-                ClinicId = Dto.ClinicId,
+                ClinicId = Dto.ClincId,
                 DoctorId = Dto.DoctorId,
                 SlotDurationMinutes = Dto.SlotDurationMinutes,
                 Day = slot.Day,

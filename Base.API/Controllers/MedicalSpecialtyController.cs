@@ -31,7 +31,7 @@ namespace Base.API.Controllers
             var result = list.ToMedicalSpecialtyDTOSet();
             if (!list.Any())
             {
-                throw new NotFoundException("No clinc requests are currently defined in the system.");
+                throw new NotFoundException("No Clinc requests are currently defined in the system.");
             }
             return Ok(new ApiResponseDTO(200, "All Requests", result));
         }
