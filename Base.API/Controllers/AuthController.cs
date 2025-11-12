@@ -217,7 +217,7 @@ namespace Base.API.Controllers
                     throw new BadRequestException("Email is Required.");
 
                 await _authService.SendOtpAsync(Email);
-                return Ok(new ApiResponseDTO(200, "Credentials accepted. A One-Time Password (OTP) has been sent to your email. Please proceed to /api/auth/verify-email"));
+                return Ok(new ApiResponseDTO(200, "A One-Time (OTP) has been sent to your email."));
 
 
             }
@@ -274,7 +274,7 @@ namespace Base.API.Controllers
                     throw new BadRequestException("Invalid request data.");
 
                 await _authService.SendOtpAsync(Email);
-                return Ok(new ApiResponseDTO(200, "Credentials accepted. A One-Time Password (OTP) has been sent to your email. Please proceed to /api/auth/reset-password."));
+                return Ok(new ApiResponseDTO(200, "A One-Time (OTP) has been sent to your email."));
 
             }
             catch (Exception ex)
