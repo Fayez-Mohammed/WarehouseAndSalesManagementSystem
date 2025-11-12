@@ -90,6 +90,11 @@ internal class Program
         app.UseStaticFiles();
 
 
+        
+
+        // 💡 تعيين الخرائط للمتحكمات
+        app.MapControllers();
+        app.UseHangfireDashboard("/hangfire");
         // Cairo timezone
         var cairoTimeZone = TZConvert.GetTimeZoneInfo("Africa/Cairo");
 
@@ -103,10 +108,6 @@ internal class Program
                 TimeZone = cairoTimeZone
             }
         );
-
-        // 💡 تعيين الخرائط للمتحكمات
-        app.MapControllers();
-        app.UseHangfireDashboard("/hangfire");
 
         // 💡 تعيين نقطة النهاية الافتراضية للتعامل مع الطلبات غير المعروفة
         app.MapFallback(async context =>
