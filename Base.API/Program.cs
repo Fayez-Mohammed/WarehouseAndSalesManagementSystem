@@ -73,6 +73,7 @@ internal class Program
 
         // 💡 تفعيل Response Caching
         app.UseResponseCaching();
+        app.UseRouting();
 
         // 🛡️ تفعيل المصادقة
         app.UseAuthentication();
@@ -87,7 +88,7 @@ internal class Program
         app.UseMiddleware<SuccessResponseMiddleware>();
 
         app.UseStaticFiles();
-        app.UseHangfireDashboard("/hangfire");
+
 
         // Cairo timezone
         var cairoTimeZone = TZConvert.GetTimeZoneInfo("Africa/Cairo");
@@ -105,6 +106,7 @@ internal class Program
 
         // 💡 تعيين الخرائط للمتحكمات
         app.MapControllers();
+        app.UseHangfireDashboard("/hangfire");
 
         // 💡 تعيين نقطة النهاية الافتراضية للتعامل مع الطلبات غير المعروفة
         app.MapFallback(async context =>
