@@ -1,4 +1,5 @@
 ﻿using Base.API.Filters;
+using Base.API.Helper;
 using Base.DAL.Contexts;
 using Base.DAL.Models;
 using Base.Repo.Implementations;
@@ -146,6 +147,8 @@ namespace Base.API.Services
             {
                 options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
                 options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                options.JsonSerializerOptions.PropertyNamingPolicy = new LowerCaseNamingPolicy();
+                options.JsonSerializerOptions.DictionaryKeyPolicy = new LowerCaseNamingPolicy(); // مهم للـ Dictionary keys
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
             });
 
