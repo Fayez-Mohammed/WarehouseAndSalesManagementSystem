@@ -1,4 +1,5 @@
-﻿using Base.API.MiddleWare;
+﻿using Base.API.Filters;
+using Base.API.MiddleWare;
 using Base.API.Services;
 using Base.DAL.Contexts;
 using Base.DAL.Models;
