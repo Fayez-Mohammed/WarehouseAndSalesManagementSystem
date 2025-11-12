@@ -41,6 +41,20 @@ namespace Base.API.Controllers
             _emailSender = emailSender;
         }
 
+        /// <summary>
+        /// Handles the creation of a new clinic registration request.
+        /// </summary>
+        /// <remarks>This method validates the provided registration details and ensures that no existing
+        /// clinic is registered  with the same email address. If the registration is valid and unique, the clinic
+        /// registration request is  saved and processed for review. An email notification will be sent after the review
+        /// process is completed.</remarks>
+        /// <param name="model">The clinic registration details provided in the request body. This must be a valid  <see
+        /// cref="ClincRegistrationDTO"/> object containing the necessary information for registration.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the result of the operation. If the request is successful, 
+        /// returns an HTTP 200 response with a message confirming that the request has been received and is under
+        /// review.</returns>
+        /// <exception cref="BadRequestException">Thrown if the provided registration details are invalid, if a clinic with the same email address already
+        /// exists,  or if an error occurs during the registration process.</exception>
         [HttpPost("clinic-request")]
         [AllowAnonymous]
         public async Task<IActionResult> CreateClinic([FromBody] ClincRegistrationDTO model)
@@ -63,6 +77,16 @@ namespace Base.API.Controllers
             throw new BadRequestException("An error occurred, please try again later.");
         }
 
+        /// <summary>
+        /// Retrieves a paginated list of clinic requests with a status of "pending".
+        /// </summary>
+        /// <remarks>This endpoint is restricted to users with the "SystemAdmin" role. If no clinic
+        /// requests with a status of  "pending" are found, a <see cref="NotFoundException"/> is thrown.</remarks>
+        /// <param name="pageIndex">The index of the page to retrieve. The default value is 1.</param>
+        /// <param name="pageSize">The number of items per page. The default value is 10.</param>
+        /// <returns>An <see cref="IActionResult"/> containing an <see cref="ApiResponseDTO"/> with the list of clinic requests 
+        /// and a status code of 200 if successful.</returns>
+        /// <exception cref="NotFoundException">Thrown when no clinic requests with a status of "pending" are found in the system.</exception>
         [HttpGet("clinics-requests")]
         [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> GetClinicsRequests(int pageIndex = 1, int pageSize = 10)
@@ -80,6 +104,22 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "All Requests", result));
         }
 
+        /// <summary>
+        /// Approves a clinic's request to join the system by updating its status to "active" and creating an associated
+        /// clinic administrator account if one does not already exist.
+        /// </summary>
+        /// <remarks>This method performs the following actions: <list type="bullet"> <item>Validates the
+        /// provided <paramref name="ClincId"/> and ensures the clinic exists in the system.</item> <item>Updates the
+        /// clinic's status to "active".</item> <item>Creates a clinic administrator account if one does not already
+        /// exist for the clinic.</item> <item>Sends an email notification to the clinic administrator with their
+        /// account details.</item> </list> The method requires the caller to have the "SystemAdmin" role and is
+        /// accessible via an HTTP PATCH request.</remarks>
+        /// <param name="ClincId">The unique identifier of the clinic to be approved. This parameter cannot be null or empty.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the result of the operation. Returns a success response if the
+        /// clinic is approved and the administrator account is created successfully.</returns>
+        /// <exception cref="BadRequestException">Thrown if <paramref name="ClincId"/> is null, empty, or if the operation fails due to invalid input or email
+        /// sending issues.</exception>
+        /// <exception cref="NotFoundException">Thrown if no clinic is found with the specified <paramref name="ClincId"/>.</exception>
         [HttpPatch("approve-Clinc-request")]
         [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> ApproveClinicsRequests([FromBody] string ClincId)
@@ -138,6 +178,16 @@ namespace Base.API.Controllers
             throw new BadRequestException("Failed to Approve Clinc Request");
         }
 
+        /// <summary>
+        /// Retrieves a paginated list of system clinics that are not in a pending status.
+        /// </summary>
+        /// <remarks>This endpoint is restricted to users with the "SystemAdmin" role. Clinics with a
+        /// status of "Pending"  are excluded from the results.</remarks>
+        /// <param name="pageIndex">The index of the page to retrieve. The default value is 1.</param>
+        /// <param name="pageSize">The number of items to include in each page. The default value is 10.</param>
+        /// <returns>An <see cref="IActionResult"/> containing an <see cref="ApiResponseDTO"/> with the HTTP status code,  a
+        /// message, and the paginated list of clinics. If no clinics are found, an exception is thrown.</returns>
+        /// <exception cref="NotFoundException">Thrown when no clinics are currently defined in the system.</exception>
         [HttpGet("system-clinics")]
         [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> GetSystemClinics(int pageIndex = 1, int pageSize = 10)
@@ -151,6 +201,14 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "All Requests", result));
         }
 
+        /// <summary>
+        /// Activates a clinic by setting its status to active.
+        /// </summary>
+        /// <param name="ClincId">The unique identifier of the clinic to activate. Cannot be null or empty.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the result of the operation.  Returns a 200 OK response with a
+        /// success message if the clinic is successfully activated.</returns>
+        /// <exception cref="BadRequestException">Thrown if <paramref name="ClincId"/> is null or empty.</exception>
+        /// <exception cref="NotFoundException">Thrown if the activation process fails, indicating the clinic could not be found or updated.</exception>
         [HttpPatch("activate-Clinic")]
         [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> ActivateClinic(string ClincId)
@@ -164,6 +222,15 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "Clinc Activated"));
         }
 
+        /// <summary>
+        /// Deactivates a clinic by setting its status to "not active."
+        /// </summary>
+        /// <remarks>This endpoint is restricted to users with the "SystemAdmin" role.</remarks>
+        /// <param name="ClincId">The unique identifier of the clinic to deactivate. Cannot be null or empty.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the result of the operation.  Returns a 200 OK response with a
+        /// success message if the clinic is successfully deactivated.</returns>
+        /// <exception cref="BadRequestException">Thrown if <paramref name="ClincId"/> is null or empty.</exception>
+        /// <exception cref="NotFoundException">Thrown if the operation fails to deactivate the clinic.</exception>
         [HttpPatch("deactivate-clinic")]
         [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> DeactivateClinic(string ClincId)
@@ -177,6 +244,15 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "Clinc Deactivated"));
         }
 
+        /// <summary>
+        /// Retrieves a list of clinic administrators for the specified clinic.
+        /// </summary>
+        /// <remarks>This endpoint is restricted to users with the "SystemAdmin" role. Ensure the provided
+        /// <paramref name="ClincId"/>  corresponds to a valid clinic.</remarks>
+        /// <param name="ClincId">The unique identifier of the clinic whose administrators are to be retrieved.</param>
+        /// <returns>An <see cref="IActionResult"/> containing an <see cref="ApiResponseDTO"/> with a status code of 200  and a
+        /// collection of clinic administrators. Each administrator is represented by their user ID and full name.</returns>
+        /// <exception cref="NotFoundException">Thrown if no administrators are defined for the specified clinic.</exception>
         [HttpGet("clinic-adminusers")]
         [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> GetClinicAdmins(string ClincId)
@@ -191,6 +267,21 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "All Clinc Admins", list));
         }
 
+        /// <summary>
+        /// Resets the password for a clinic administrator account.
+        /// </summary>
+        /// <remarks>This method is accessible only to users with the "SystemAdmin" role. It validates the
+        /// provided input, resets the password for the specified clinic administrator, and sends an email notification
+        /// with the new password. If the email fails to send, the password reset is still considered successful, but an
+        /// error message is returned.</remarks>
+        /// <param name="model">An instance of <see cref="ClincAdminResetPasswordDTO"/> containing the administrator's ID and the new
+        /// password.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the result of the operation. Returns a success response if the
+        /// password is reset successfully, or an appropriate error response if the operation fails.</returns>
+        /// <exception cref="BadRequestException">Thrown if the input model is invalid, the password reset operation fails, or the email notification cannot
+        /// be sent.</exception>
+        /// <exception cref="NotFoundException">Thrown if no user is found with the specified administrator ID.</exception>
+        /// <exception cref="InternalServerException">Thrown if an unexpected error occurs during the password reset process.</exception>
         [HttpPost("clincadmin-resetpassword")]
         [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> ResetPasswordforClinicAdmin([FromBody] ClincAdminResetPasswordDTO model)
@@ -237,6 +328,19 @@ namespace Base.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Creates a new clinic administrator account and assigns the user to the "ClincAdmin" role.
+        /// </summary>
+        /// <remarks>This method validates the input model, ensures the email does not already exist, and
+        /// creates a new user with the "ClincAdmin" role.  The user's email is confirmed by default, and a randomly
+        /// generated password is assigned.  An email is sent to the user with their account details. If the email fails
+        /// to send, the user is still created, but an exception is thrown.</remarks>
+        /// <param name="model">The data transfer object containing the details required to create the clinic administrator, including their
+        /// full name, email, and associated clinic ID.</param>
+        /// <returns>An <see cref="IActionResult"/> indicating the result of the operation. If successful, returns an HTTP 200
+        /// response with a message confirming the creation of the clinic administrator.</returns>
+        /// <exception cref="BadRequestException">Thrown if the input model is invalid, the email already exists, the user creation fails, or the email
+        /// notification cannot be sent.</exception>
         [HttpPost("create-clinicadmin")]
         [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> CreateClinicAdmin([FromBody] ClincAdminProfileCreateDTO model)
