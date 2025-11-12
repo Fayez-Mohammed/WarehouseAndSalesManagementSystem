@@ -100,8 +100,6 @@ internal class Program
             Authorization = new[] { new AllowAllDashboardAuthorizationFilter() }
         });
 
-        // ✅ Route test بسيط
-        app.MapGet("/test", () => "Hello from .NET 8");
         // Cairo timezone
         var cairoTimeZone = TZConvert.GetTimeZoneInfo("Africa/Cairo");
 

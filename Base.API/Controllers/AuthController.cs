@@ -376,6 +376,7 @@ namespace Base.API.Controllers
         /// Googles the login.
         /// </summary>
         /// <returns></returns>
+        [ApiExplorerSettings(IgnoreApi = true)]
         [HttpGet("google-login")]
         public IActionResult GoogleLogin()
         {
@@ -389,6 +390,8 @@ namespace Base.API.Controllers
         /// Googles the response.
         /// </summary>
         /// <returns></returns>
+        [ApiExplorerSettings(IgnoreApi = true)]
+
         [HttpGet("google-response")]
         public async Task<IActionResult> GoogleResponse()
         {
@@ -435,6 +438,7 @@ namespace Base.API.Controllers
         /// Facebooks the login.
         /// </summary>
         /// <returns></returns>
+        [ApiExplorerSettings(IgnoreApi = true)]
         [HttpGet("facebook-login")]
         public IActionResult FacebookLogin()
         {
@@ -447,6 +451,7 @@ namespace Base.API.Controllers
         /// Facebooks the response.
         /// </summary>
         /// <returns></returns>
+        [ApiExplorerSettings(IgnoreApi = true)]
         [HttpGet("facebook-response")]
         public async Task<IActionResult> FacebookResponse()
         {
