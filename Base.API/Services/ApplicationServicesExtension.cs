@@ -173,6 +173,8 @@ namespace Base.API.Services
                     .UseSqlServerStorage(_configuration.GetConnectionString("DefaultConnection")));
             services.AddHangfireServer();
             services.AddScoped<AppointmentSlotGeneratorJob>();
+            Console.WriteLine("✅ Hangfire server configured successfully");
+
             #endregion
             return services;
         }
