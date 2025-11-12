@@ -1,5 +1,6 @@
 ﻿using Azure.Core;
 using Base.API.DTOs;
+using Base.API.Helper;
 using Base.DAL.Models;
 using Base.Repo.Interfaces;
 using Base.Services.Implementations;
@@ -40,9 +41,9 @@ namespace Base.API.Controllers
             _emailSender = emailSender;
         }
 
-        [HttpPost("Clinc-request")]
+        [HttpPost("clinic-request")]
         [AllowAnonymous]
-        public async Task<IActionResult> CreateClinc([FromBody] ClincRegistrationDTO model)
+        public async Task<IActionResult> CreateClinic([FromBody] ClincRegistrationDTO model)
         {
             if (!ModelState.IsValid)
             {
@@ -62,17 +63,17 @@ namespace Base.API.Controllers
             throw new BadRequestException("An error occurred, please try again later.");
         }
 
-        [HttpGet("Clincs-requests")]
+        [HttpGet("clinics-requests")]
         [Authorize(Roles = "SystemAdmin")]
-        public async Task<IActionResult> GetClincsRequests()
+        public async Task<IActionResult> GetClinicsRequests(int pageIndex = 1, int pageSize = 10)
         {
             //var ClincRepo = _unitOfWork.Repository<Clinc>();
             //var spec = new BaseSpecification<Clinc>(c => c.Status.ToLower() == "pending");
             //spec.AllIncludes.Add(c => c.Include(_c => _c.MedicalSpecialty));
             //var list = await ClincRepo.ListAsync(spec);
             //var result = list.ToClincDTOSet();
-            var result = await GetClincsAsync(c => c.Status.ToLower() == ClincStatus.pending.ToString());
-            if (!result.Any())
+            var result = await GetClinicsAsync(c => c.Status.ToLower() == ClincStatus.pending.ToString(), pageIndex, pageSize);
+            if (!result.list.Any())
             {
                 throw new NotFoundException("No Clinc requests are currently defined in the system.");
             }
@@ -81,7 +82,7 @@ namespace Base.API.Controllers
 
         [HttpPatch("approve-Clinc-request")]
         [Authorize(Roles = "SystemAdmin")]
-        public async Task<IActionResult> ApproveClincsRequests([FromBody] string ClincId)
+        public async Task<IActionResult> ApproveClinicsRequests([FromBody] string ClincId)
         {
             if (string.IsNullOrEmpty(ClincId)) throw new BadRequestException("ClincId is required");
 
@@ -123,7 +124,7 @@ namespace Base.API.Controllers
                         try
                         {
                             await _emailSender.SendEmailAsync(request.Email, "Clinc Add Request Acceptance",
-                                ApproveClincsRequestsMail(request.Name, request.Email, password));
+                                ApproveClinicsRequestsMail(request.Name, request.Email, password));
                         }
                         catch (Exception ex)
                         {
@@ -137,29 +138,25 @@ namespace Base.API.Controllers
             throw new BadRequestException("Failed to Approve Clinc Request");
         }
 
-        [HttpGet("system-Clincs")]
+        [HttpGet("system-clinics")]
         [Authorize(Roles = "SystemAdmin")]
-        public async Task<IActionResult> GetSystemClincs()
+        public async Task<IActionResult> GetSystemClinics(int pageIndex = 1, int pageSize = 10)
         {
-            //var ClincRepo = _unitOfWork.Repository<Clinc>();
-            //var spec = new BaseSpecification<Clinc>(c => c.Status.ToLower() == "pending");
-            //spec.AllIncludes.Add(c => c.Include(_c => _c.MedicalSpecialty));
-            //var list = await ClincRepo.ListAsync(spec);
-            //var result = list.ToClincDTOSet();
-            var result = await GetClincsAsync(c => c.Status.ToLower() != ClincStatus.pending.ToString());
-            if (!result.Any())
+
+            var result = await GetClinicsAsync(c => c.Status.ToLower() != ClincStatus.pending.ToString(), pageIndex, pageSize);
+            if (!result.list.Any())
             {
                 throw new NotFoundException("No Clincs are currently defined in the system.");
             }
             return Ok(new ApiResponseDTO(200, "All Requests", result));
         }
 
-        [HttpPatch("activate-Clinc")]
+        [HttpPatch("activate-Clinic")]
         [Authorize(Roles = "SystemAdmin")]
-        public async Task<IActionResult> ActivateClinc(string ClincId)
+        public async Task<IActionResult> ActivateClinic(string ClincId)
         {
             if (string.IsNullOrEmpty(ClincId)) throw new BadRequestException("ClincId is Required");
-            var result = await ChangeClincStatusAsync(c => c.Id == ClincId, ClincStatus.active);
+            var result = await ChangeClinicStatusAsync(c => c.Id == ClincId, ClincStatus.active);
             if (result)
             {
                 throw new NotFoundException("Faild To Activate Clinc");
@@ -167,12 +164,12 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "Clinc Activated"));
         }
 
-        [HttpPatch("deactivate-Clinc")]
+        [HttpPatch("deactivate-clinic")]
         [Authorize(Roles = "SystemAdmin")]
-        public async Task<IActionResult> DeactivateClinc(string ClincId)
+        public async Task<IActionResult> DeactivateClinic(string ClincId)
         {
             if (string.IsNullOrEmpty(ClincId)) throw new BadRequestException("ClincId is Required");
-            var result = await ChangeClincStatusAsync(c => c.Id == ClincId, ClincStatus.notactive);
+            var result = await ChangeClinicStatusAsync(c => c.Id == ClincId, ClincStatus.notactive);
             if (result)
             {
                 throw new NotFoundException("Faild To Deactivate Clinc");
@@ -180,9 +177,9 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "Clinc Deactivated"));
         }
 
-        [HttpGet("Clinc-admins")]
+        [HttpGet("clinic-adminusers")]
         [Authorize(Roles = "SystemAdmin")]
-        public async Task<IActionResult> GetClincAdmins(string ClincId)
+        public async Task<IActionResult> GetClinicAdmins(string ClincId)
         {
             var Repo = _unitOfWork.Repository<ClincAdminProfile>();
             var spec = new BaseSpecification<ClincAdminProfile>(e => e.ClincId == ClincId);
@@ -194,9 +191,9 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "All Clinc Admins", list));
         }
 
-        [HttpPost("Clincadmin-resetpassword")]
+        [HttpPost("clincadmin-resetpassword")]
         [Authorize(Roles = "SystemAdmin")]
-        public async Task<IActionResult> ResetPasswordforClincAdmin([FromBody] ClincAdminResetPasswordDTO model)
+        public async Task<IActionResult> ResetPasswordforClinicAdmin([FromBody] ClincAdminResetPasswordDTO model)
         {
             if (!ModelState.IsValid)
             {
@@ -221,7 +218,7 @@ namespace Base.API.Controllers
                 }
                 try
                 {
-              
+
                     await _emailSender.SendEmailAsync(user.Email, "New Password for your Account",
                         GetClinicAdminAccountCreatedTemplate(user.FullName, "", user.Email, model.NewPassword, "", "", "", "", DateTime.Now.Year));
                 }
@@ -240,7 +237,7 @@ namespace Base.API.Controllers
             }
         }
 
-        [HttpGet("create-Clinicadmin")]
+        [HttpPost("create-clinicadmin")]
         [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> CreateClinicAdmin([FromBody] ClincAdminProfileCreateDTO model)
         {
@@ -328,7 +325,7 @@ namespace Base.API.Controllers
             return charset[Math.Abs(value) % charset.Length];
         }
 
-        private static string ApproveClincsRequestsMail(string ClincName, string username, string password)
+        private static string ApproveClinicsRequestsMail(string ClincName, string username, string password)
         {
             string systemName = "Clinc Management System";
             string loginUrl = "https://your-system-url.com/login";
@@ -389,17 +386,21 @@ namespace Base.API.Controllers
 </html>";
         }
 
-        private async Task<ICollection<ClincDTO>> GetClincsAsync(Expression<Func<Clinic, bool>> CriteriaExpression)
+        private async Task<Pagination<ClincDTO>> GetClinicsAsync(Expression<Func<Clinic, bool>> CriteriaExpression, int pageIndex = 1, int pageSize = 10)
         {
             var ClincRepo = _unitOfWork.Repository<Clinic>();
             var spec = new BaseSpecification<Clinic>(CriteriaExpression);
+            spec.ApplyPaging((pageIndex - 1) * pageSize, pageSize);
+            var totalItems = await ClincRepo.CountAsync(spec);
+
             spec.AllIncludes.Add(c => c.Include(_c => _c.MedicalSpecialty));
             var list = await ClincRepo.ListAsync(spec);
             var result = list.ToClincDTOSet();
-            return result;
+            var pagination = new Pagination<ClincDTO>(pageIndex, pageSize, totalItems, result);
+            return pagination;
         }
 
-        private async Task<bool> ChangeClincStatusAsync(Expression<Func<Clinic, bool>> CriteriaExpression, ClincStatus status)
+        private async Task<bool> ChangeClinicStatusAsync(Expression<Func<Clinic, bool>> CriteriaExpression, ClincStatus status)
         {
             var ClincRepo = _unitOfWork.Repository<Clinic>();
             var spec = new BaseSpecification<Clinic>(CriteriaExpression);
@@ -631,7 +632,6 @@ namespace Base.API.Controllers
         [Required]
         public required string FullName { get; set; }
     }
-
     enum ClincStatus
     {
         pending,
