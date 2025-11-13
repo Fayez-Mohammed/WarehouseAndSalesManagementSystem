@@ -78,25 +78,50 @@ namespace Base.API.Controllers
         }
 
         /// <summary>
-        /// Retrieves a paginated list of clinic requests with a status of "pending".
+        /// Gets the clinics requests.
         /// </summary>
-        /// <remarks>This endpoint is restricted to users with the "SystemAdmin" role. If no clinic
-        /// requests with a status of  "pending" are found, a <see cref="NotFoundException"/> is thrown.</remarks>
-        /// <param name="pageIndex">The index of the page to retrieve. The default value is 1.</param>
-        /// <param name="pageSize">The number of items per page. The default value is 10.</param>
-        /// <returns>An <see cref="IActionResult"/> containing an <see cref="ApiResponseDTO"/> with the list of clinic requests 
-        /// and a status code of 200 if successful.</returns>
-        /// <exception cref="NotFoundException">Thrown when no clinic requests with a status of "pending" are found in the system.</exception>
+        /// <param name="searchType">Type of the search.</param>
+        /// <param name="valueToSearch">The value to search.</param>
+        /// <param name="pageIndex">Index of the page.</param>
+        /// <param name="pageSize">Size of the page.</param>
+        /// <returns></returns>
+        /// <exception cref="Base.Services.Implementations.NotFoundException">No Clinc requests are currently defined in the system.</exception>
         [HttpGet("clinics-requests")]
         [Authorize(Roles = "SystemAdmin")]
-        public async Task<IActionResult> GetClinicsRequests(int pageIndex = 1, int pageSize = 10)
+        public async Task<IActionResult> GetClinicsRequests(string? searchType = null, string? valueToSearch = null, int pageIndex = 1, int pageSize = 10)
         {
-            //var ClincRepo = _unitOfWork.Repository<Clinc>();
-            //var spec = new BaseSpecification<Clinc>(c => c.Status.ToLower() == "pending");
-            //spec.AllIncludes.Add(c => c.Include(_c => _c.MedicalSpecialty));
-            //var list = await ClincRepo.ListAsync(spec);
-            //var result = list.ToClincDTOSet();
-            var result = await GetClinicsAsync(c => c.Status.ToLower() == ClincStatus.pending.ToString(), pageIndex, pageSize);
+            Expression<Func<Clinic, bool>> CriteriaExpression;
+
+            if (!string.IsNullOrEmpty(searchType) && !string.IsNullOrEmpty(valueToSearch))
+            {
+                if (Enum.TryParse<ClinicSearchType>(searchType, true, out var searchTypeEnum))
+                {
+                    switch (searchTypeEnum)
+                    {
+                        case ClinicSearchType.Name:
+                            CriteriaExpression = c => c.Status.ToLower() == ClinicStatus.pending.ToString() && c.Name.ToLower().Contains(valueToSearch.ToLower());
+                            break;
+                        case ClinicSearchType.Email:
+                            CriteriaExpression = c => c.Status.ToLower() == ClinicStatus.pending.ToString() && c.Email.ToLower().Contains(valueToSearch.ToLower());
+                            break;
+                        case ClinicSearchType.Status:
+                            CriteriaExpression = c => c.Status.ToLower() == valueToSearch.ToLower();
+                            break;
+                        default:
+                            CriteriaExpression = c => c.Status.ToLower() == ClinicStatus.pending.ToString();
+                            break;
+                    }
+                }
+                else
+                {
+                    CriteriaExpression = c => c.Status.ToLower() == ClinicStatus.pending.ToString();
+                }
+            }
+            else
+            {
+                CriteriaExpression = c => c.Status.ToLower() == ClinicStatus.pending.ToString();
+            }
+            var result = await GetClinicsAsync(CriteriaExpression, pageIndex, pageSize);
             if (!result.list.Any())
             {
                 throw new NotFoundException("No Clinc requests are currently defined in the system.");
@@ -132,9 +157,8 @@ namespace Base.API.Controllers
             var request = await ClincRepo.GetEntityWithSpecAsync(spec);
 
             if (request is null) throw new NotFoundException("ClincId not found");
-            request.Status = "active";
+            request.Status = ClinicStatus.active.ToString();
             await ClincRepo.UpdateAsync(request);
-
             if (await _unitOfWork.CompleteAsync() > 0)
             {
                 // ✅ تحقق لو الأدمن مش 
@@ -179,21 +203,51 @@ namespace Base.API.Controllers
         }
 
         /// <summary>
-        /// Retrieves a paginated list of system clinics that are not in a pending status.
+        /// Gets the system clinics.
         /// </summary>
-        /// <remarks>This endpoint is restricted to users with the "SystemAdmin" role. Clinics with a
-        /// status of "Pending"  are excluded from the results.</remarks>
-        /// <param name="pageIndex">The index of the page to retrieve. The default value is 1.</param>
-        /// <param name="pageSize">The number of items to include in each page. The default value is 10.</param>
-        /// <returns>An <see cref="IActionResult"/> containing an <see cref="ApiResponseDTO"/> with the HTTP status code,  a
-        /// message, and the paginated list of clinics. If no clinics are found, an exception is thrown.</returns>
-        /// <exception cref="NotFoundException">Thrown when no clinics are currently defined in the system.</exception>
+        /// <param name="searchType">Type of the search.</param>
+        /// <param name="valueToSearch">The value to search.</param>
+        /// <param name="pageIndex">Index of the page.</param>
+        /// <param name="pageSize">Size of the page.</param>
+        /// <returns></returns>
+        /// <exception cref="Base.Services.Implementations.NotFoundException">No Clincs are currently defined in the system.</exception>
         [HttpGet("system-clinics")]
         [Authorize(Roles = "SystemAdmin")]
-        public async Task<IActionResult> GetSystemClinics(int pageIndex = 1, int pageSize = 10)
+        public async Task<IActionResult> GetSystemClinics(string? searchType = null, string? valueToSearch = null, int pageIndex = 1, int pageSize = 10)
         {
+            Expression<Func<Clinic, bool>> CriteriaExpression;
 
-            var result = await GetClinicsAsync(c => c.Status.ToLower() != ClincStatus.pending.ToString(), pageIndex, pageSize);
+            if (!string.IsNullOrEmpty(searchType) && !string.IsNullOrEmpty(valueToSearch))
+            {
+                if (Enum.TryParse<ClinicSearchType>(searchType, true, out var searchTypeEnum))
+                {
+                    switch (searchTypeEnum)
+                    {
+                        case ClinicSearchType.Name:
+                            CriteriaExpression = c => c.Status.ToLower() != ClinicStatus.pending.ToString() && c.Name.ToLower().Contains(valueToSearch.ToLower());
+                            break;
+                        case ClinicSearchType.Email:
+                            CriteriaExpression = c => c.Status.ToLower() != ClinicStatus.pending.ToString() && c.Email.ToLower().Contains(valueToSearch.ToLower());
+                            break;
+                        case ClinicSearchType.Status:
+                            CriteriaExpression = c => c.Status.ToLower() == valueToSearch.ToLower();
+                            break;
+                        default:
+                            CriteriaExpression = c => c.Status.ToLower() != ClinicStatus.pending.ToString();
+                            break;
+                    }
+                }
+                else
+                {
+                    CriteriaExpression = c => c.Status.ToLower() != ClinicStatus.pending.ToString();
+                }
+            }
+            else
+            {
+                CriteriaExpression = c => c.Status.ToLower() != ClinicStatus.pending.ToString();
+            }
+
+            var result = await GetClinicsAsync(CriteriaExpression, pageIndex, pageSize);
             if (!result.list.Any())
             {
                 throw new NotFoundException("No Clincs are currently defined in the system.");
@@ -214,7 +268,7 @@ namespace Base.API.Controllers
         public async Task<IActionResult> ActivateClinic(string ClincId)
         {
             if (string.IsNullOrEmpty(ClincId)) throw new BadRequestException("ClincId is Required");
-            var result = await ChangeClinicStatusAsync(c => c.Id == ClincId, ClincStatus.active);
+            var result = await ChangeClinicStatusAsync(c => c.Id == ClincId, ClinicStatus.active);
             if (result)
             {
                 throw new NotFoundException("Faild To Activate Clinc");
@@ -236,7 +290,7 @@ namespace Base.API.Controllers
         public async Task<IActionResult> DeactivateClinic(string ClincId)
         {
             if (string.IsNullOrEmpty(ClincId)) throw new BadRequestException("ClincId is Required");
-            var result = await ChangeClinicStatusAsync(c => c.Id == ClincId, ClincStatus.notactive);
+            var result = await ChangeClinicStatusAsync(c => c.Id == ClincId, ClinicStatus.notactive);
             if (result)
             {
                 throw new NotFoundException("Faild To Deactivate Clinc");
@@ -391,8 +445,6 @@ namespace Base.API.Controllers
 
         }
 
-
-
         #region Helper Method
         public static string GeneratePassword(int length = 12)
         {
@@ -492,19 +544,18 @@ namespace Base.API.Controllers
 
         private async Task<Pagination<ClincDTO>> GetClinicsAsync(Expression<Func<Clinic, bool>> CriteriaExpression, int pageIndex = 1, int pageSize = 10)
         {
-            var ClincRepo = _unitOfWork.Repository<Clinic>();
+            var ClinicRepo = _unitOfWork.Repository<Clinic>();
             var spec = new BaseSpecification<Clinic>(CriteriaExpression);
             spec.ApplyPaging((pageIndex - 1) * pageSize, pageSize);
-            var totalItems = await ClincRepo.CountAsync(spec);
-
+            var totalItems = await ClinicRepo.CountAsync(spec);
             spec.AllIncludes.Add(c => c.Include(_c => _c.MedicalSpecialty));
-            var list = await ClincRepo.ListAsync(spec);
+            var list = await ClinicRepo.ListAsync(spec);
             var result = list.ToClincDTOSet();
             var pagination = new Pagination<ClincDTO>(pageIndex, pageSize, totalItems, result);
             return pagination;
         }
 
-        private async Task<bool> ChangeClinicStatusAsync(Expression<Func<Clinic, bool>> CriteriaExpression, ClincStatus status)
+        private async Task<bool> ChangeClinicStatusAsync(Expression<Func<Clinic, bool>> CriteriaExpression, ClinicStatus status)
         {
             var ClincRepo = _unitOfWork.Repository<Clinic>();
             var spec = new BaseSpecification<Clinic>(CriteriaExpression);
@@ -665,7 +716,7 @@ namespace Base.API.Controllers
         public string? AddressCity { get; set; }
         public string? AddressLocation { get; set; }
         public string? Phone { get; set; }
-        public string Status { get; set; } = "pending";
+        public string Status { get; set; } = ClinicStatus.pending.ToString();
     }
     public static class ClincExtensions
     {
@@ -686,7 +737,7 @@ namespace Base.API.Controllers
                 AddressCity = Dto.AddressCity,
                 AddressLocation = Dto.AddressLocation,
                 Phone = Dto.Phone,
-                Status = "pending",
+                Status = ClinicStatus.pending.ToString(),
             };
         }
         public static ClincDTO ToClincDTO(this Clinic entity)
@@ -718,7 +769,6 @@ namespace Base.API.Controllers
 
             return entities.Select(e => e.ToClincDTO()).ToHashSet();
         }
-
     }
     public class ClincAdminResetPasswordDTO
     {
@@ -736,10 +786,16 @@ namespace Base.API.Controllers
         [Required]
         public required string FullName { get; set; }
     }
-    enum ClincStatus
+    enum ClinicStatus
     {
         pending,
         active,
         notactive
+    }
+    enum ClinicSearchType
+    {
+        Name,
+        Email,
+        Status
     }
 }
