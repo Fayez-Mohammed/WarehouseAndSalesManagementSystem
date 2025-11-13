@@ -33,7 +33,7 @@ namespace Base.API.Controllers
             {
                 throw new NotFoundException("No Clinc requests are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Requests", result));
+            return Ok(result);
         }
     }
 

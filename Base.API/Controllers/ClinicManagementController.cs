@@ -39,7 +39,7 @@ namespace Base.API.Controllers
             _emailSender = emailSender;
         }
 
-        [HttpPost("create-Clinc-user")]
+        [HttpPost("create-clinic-user")]
         public async Task<IActionResult> CreateClincUser([FromBody] ClincUserDTO model)
         {
 
@@ -48,7 +48,7 @@ namespace Base.API.Controllers
                 var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
                 throw new BadRequestException(errors);
             }
-            
+
             AvailableUserTypesForCreateUsers searchTypeEnum;
             if (!Enum.TryParse<AvailableUserTypesForCreateUsers>(model.UserType, true, out searchTypeEnum))
                 throw new InternalServerException("Invalid user type specified.");
@@ -71,23 +71,13 @@ namespace Base.API.Controllers
                 {
                     throw new BadRequestException("Registration data format is invalid.");
                 }
-              
+
                 // 4. Identity Creation - الآن نستخدم await بشكل صحيح
                 var createUserResult = await _userManager.CreateAsync(user, model.Password);
-                if (createUserResult is null)
-                    throw new InternalServerException("An unexpected error occurred during user creation.");
                 if (!createUserResult.Succeeded)
                     throw new BadRequestException(createUserResult.Errors.Select(e => e.Description));
+
                 model.UserId = user.Id;
-             
-
-                //var Role = model.UserType switch
-                //{
-                //    "ClincDoctor" => "ClincDoctor",
-                //    "ClincReceptionis" => "ClincReceptionis",
-                //    _ => throw new BadRequestException("Invalid user type specified."),
-                //};
-
                 var roleResult = await _userManager.AddToRoleAsync(user, searchTypeEnum.ToString());
                 if (!roleResult.Succeeded)
                 {
@@ -96,16 +86,15 @@ namespace Base.API.Controllers
                     throw new InternalServerException($"Failed to assign default role. Details: {errors}");
                 }
 
-                var cuurentuser = await _userManager.GetUserAsync(User);
-                if (cuurentuser is null) throw new NotFoundException("Not Found user");
+                var currentuser = await _userManager.GetUserAsync(User);
+                if (currentuser is null) throw new NotFoundException("Not Found user");
 
-                var spec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == cuurentuser.Id);
+                var spec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == currentuser.Id);
                 var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
                 model.ClincId = (await userrepository.GetEntityWithSpecAsync(spec)).ClincId;
                 if (string.IsNullOrEmpty(model.ClincId))
-                {
                     throw new NotFoundException("The specified Clinc does not exist.");
-                }
+
                 switch (searchTypeEnum)
                 {
                     case AvailableUserTypesForCreateUsers.ClinicDoctor:
@@ -124,7 +113,7 @@ namespace Base.API.Controllers
                         await ClinicAdminRepository.AddAsync(Adminprofile);
                         break;
                 }
-               
+
                 // 6. Commit Transaction
                 if (await _unitOfWork.CompleteAsync() > 0)
                 {
@@ -146,19 +135,26 @@ namespace Base.API.Controllers
             }
         }
 
-        [HttpGet("Doctors")]
+        [HttpGet("doctors")]
         public async Task<IActionResult> GetClincDoctors()
         {
-            var ClincRepo = _unitOfWork.Repository<ClincDoctorProfile>();
+            var currentuser = await _userManager.GetUserAsync(User);
+            if (currentuser is null) throw new NotFoundException("Not Found user");
 
-            var spec = new BaseSpecification<ClincDoctorProfile>();
+            var currentspec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == currentuser.Id);
+            var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
+            var targetClinicId = (await userrepository.GetEntityWithSpecAsync(currentspec)).ClincId;
+
+            var ClincRepo = _unitOfWork.Repository<ClincDoctorProfile>();
+            var spec = new BaseSpecification<ClincDoctorProfile>(e => e.ClincId == targetClinicId);
             var list = (await ClincRepo.ListAsync(spec))
                 .Select(e => new
                 {
                     e.Id,
                     e.UserId,
-                    e.User.FullName,
-                    e.User.Email
+                    e.User?.FullName,
+                    e.User?.Email,
+                    e.User?.IsActive
                 }).ToList();
 
             if (!list.Any())
@@ -168,34 +164,58 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "All Doctors", list));
         }
 
-        [HttpGet("Clinc-users")]
-        public async Task<IActionResult> GetClincusers()
+        [HttpGet("clinic-users")]
+        public async Task<IActionResult> GetClinicUsers()
         {
-            var roles = new[] { "ClincDoctor", "ClincReceptionis" };
-            var allUsers = new List<ApplicationUser>();
+            //var roles = new[] { "ClincDoctor", "ClincReceptionis" };
+            //var allUsers = new List<ApplicationUser>();
 
-            foreach (var role in roles)
+            //foreach (var role in roles)
+            //{
+            //    var roleUsers = await _userManager.GetUsersInRoleAsync(role);
+            //    allUsers.AddRange(roleUsers);
+            //}
+
+            //var result = allUsers
+            //    .GroupBy(u => u.Id)
+            //    .Select(g => g.First())
+            //    .ToList().Select(e => new
+            //    {
+            //        e.Id,
+            //        e.FullName,
+            //        e.Email,
+            //        e.UserType,
+            //        e.IsActive
+            //    });
+            var currentuser = await _userManager.GetUserAsync(User);
+            if (currentuser is null) throw new NotFoundException("Not Found user");
+
+            var spec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == currentuser.Id);
+            var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
+            var targetClinicId = (await userrepository.GetEntityWithSpecAsync(spec)).ClincId;
+
+            var validUserTypeNames = Enum.GetNames(typeof(AvailableUserTypesForCreateUsers));
+            Expression<Func<ApplicationUser, bool>> expr = u =>
+             validUserTypeNames.Contains(u.UserType) &&
+             (
+                 (u.ClincAdminProfile != null && u.ClincAdminProfile.ClincId == targetClinicId) ||
+                 (u.ClincDoctorProfile != null && u.ClincDoctorProfile.ClincId == targetClinicId) ||
+                 (u.ClincReceptionistProfile != null && u.ClincReceptionistProfile.ClincId == targetClinicId)
+             );
+            var result = _userManager.Users.Where(expr).Select(e => new
             {
-                var roleUsers = await _userManager.GetUsersInRoleAsync(role);
-                allUsers.AddRange(roleUsers);
-            }
-
-            var result = allUsers
-                .GroupBy(u => u.Id)
-                .Select(g => g.First())
-                .ToList().Select(e => new
-                {
-                    e.Id,
-                    e.FullName,
-                    e.Email,
-                    e.UserType,
-                });
+                e.Id,
+                e.FullName,
+                e.Email,
+                e.UserType,
+                e.IsActive
+            }).ToHashSet();
 
             if (!result.Any())
             {
-                throw new NotFoundException("No Clinc requests are currently defined in the system.");
+                throw new NotFoundException("No Clinic requests are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Clinc Users", result));
+            return Ok(new ApiResponseDTO(200, "All Clinic Users", result));
         }
 
         [HttpGet("user-types")]
@@ -224,17 +244,17 @@ namespace Base.API.Controllers
             if (existingUser != null)
                 throw new BadRequestException("This doctor doesn't exist.");
 
-            var cuurentuser = await _userManager.GetUserAsync(User);
-            if (cuurentuser is null) throw new NotFoundException("Not Found user");
+            var currentuser = await _userManager.GetUserAsync(User);
+            if (currentuser is null) throw new NotFoundException("Not Found user");
 
-            var spec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == cuurentuser.Id);
-            var userrepository =  _unitOfWork.Repository<ClincAdminProfile>();
+            var spec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == currentuser.Id);
+            var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
             model.ClincId = (await userrepository.GetEntityWithSpecAsync(spec)).ClincId;
             if (string.IsNullOrEmpty(model.ClincId))
             {
                 throw new NotFoundException("The specified Clinc does not exist.");
             }
-            
+
             // 2. Transaction Setup (using statement ensures Dispose/Rollback on failure)
             await using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
@@ -271,29 +291,36 @@ namespace Base.API.Controllers
         [HttpGet("clinic-schedule")]
         public async Task<IActionResult> GetClinicSchedule()
         {
-            var cuurentuser = await _userManager.GetUserAsync(User);
-            if (cuurentuser is null) throw new NotFoundException("Not Found user");
+            #region get current User ClincId
 
-            var userspec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == cuurentuser.Id);
+            var currentuser = await _userManager.GetUserAsync(User);
+            if (currentuser is null) throw new NotFoundException("Not Found user");
+
+            var userspec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == currentuser.Id);
             var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
             var ClincId = (await userrepository.GetEntityWithSpecAsync(userspec)).ClincId;
             if (string.IsNullOrEmpty(ClincId))
             {
-                throw new NotFoundException("Not Available Clinc for Current User");
+                throw new NotFoundException("Not Available Clinic for Current User");
             }
+            #endregion
+
             var Repo = _unitOfWork.Repository<ClinicSchedule>();
-            var spec = new BaseSpecification<ClinicSchedule>(e=>e.ClinicId == ClincId);
-            var list = (await Repo.ListAsync(spec)).Select(e => new { e.DoctorId, e.Day, e.StartTime, e.EndTime });
-            if (!list.Any())
+            var spec = new BaseSpecification<ClinicSchedule>(e => e.ClinicId == ClincId);
+            spec.AllIncludes.Add(q => q.Include(c => c.Doctor).ThenInclude(u => u.User));
+            var list = (await Repo.ListAsync(spec)).Select(e => new { e.Doctor.UserId, e.Doctor?.User?.FullName, Day = e.Day.ToString(), e.StartTime, e.EndTime });
+            if (list.Count() == 0)
             {
-                throw new NotFoundException("No Clinc Schedule are currently defined in the system.");
+                throw new NotFoundException("No Clinic Schedule are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Clinc Schedule ", list));
+            return Ok(new ApiResponseDTO(200, "All Clinic Schedule ", list));
         }
 
         [HttpGet("clinic-appointmentSlots")]
         public async Task<IActionResult> GetAppointmentSlots([FromBody] bool IsBooked)
         {
+            #region current user ClincId
+
             var currentuser = await _userManager.GetUserAsync(User);
             if (currentuser is null) throw new NotFoundException("Not Found user");
 
@@ -304,9 +331,12 @@ namespace Base.API.Controllers
             {
                 throw new NotFoundException("Not Available Clinc for Current User");
             }
+            #endregion
+
             var Repo = _unitOfWork.Repository<AppointmentSlot>();
-            var spec = new BaseSpecification<AppointmentSlot>(e=>e.IsBooked == IsBooked);
-            var list = (await Repo.ListAsync(spec)).Select(e => new { e.Date, e.StartTime, e.EndTime });
+            var spec = new BaseSpecification<AppointmentSlot>(e => e.IsBooked == IsBooked && e.DoctorSchedule.ClinicId == ClincId);
+            spec.AllIncludes.Add(q => q.Include(c => c.DoctorSchedule).ThenInclude(s => s.Doctor).ThenInclude(s => s.User));
+            var list = (await Repo.ListAsync(spec)).Select(e => new { e.DoctorSchedule?.Doctor?.User?.FullName, Day = e.DoctorSchedule?.Day.ToString(), e.Date, e.StartTime, e.EndTime });
             if (!list.Any())
             {
                 throw new NotFoundException("No Appointments are currently defined in the system.");
@@ -324,6 +354,218 @@ namespace Base.API.Controllers
             }
             return Ok(new ApiResponseDTO(200, "All UserTypes", result));
         }
+
+        [HttpPost("clinicuser-resetpassword")]
+        public async Task<IActionResult> ResetPasswordforClinicUser([FromBody] ClinicUserResetPasswordDTO model)
+        {
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+                throw new BadRequestException(errors);
+            }
+
+            try
+            {
+                var user = await _userManager.FindByIdAsync(model.UserId);
+                if (user is null)
+                {
+                    throw new NotFoundException($"There is no user with UserId '{model.UserId}'");
+                }
+                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+                var result = await _userManager.ResetPasswordAsync(user, token, model.NewPassword);
+                if (!result.Succeeded)
+                {
+                    var errors = result.Errors.Select(e => e.Description);
+                    throw new BadRequestException($"Reset Password failed: {string.Join(", ", errors)}");
+
+                }
+                try
+                {
+
+                    await _emailSender.SendEmailAsync(user.Email, "New Password for your Account",
+                        ResetPasswordClinicUserTemplate(model.NewPassword));
+                }
+                catch (Exception ex)
+                {
+                    throw new BadRequestException("Password Reseted Successfully but Failed to send mail");
+                }
+                // 3. Success response
+                return Ok(new ApiResponseDTO(200, "Password Reset successfully."));
+            }
+            catch (Exception ex)
+            {
+                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
+                    throw;
+                throw new InternalServerException("An unexpected error occurred during Reset Password");
+            }
+        }
+
+        [HttpPost("activate-user")]
+        public async Task<IActionResult> ActivateUser(string userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+                throw new BadRequestException("UserId is required");
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return NotFound("User not found");
+
+            user.IsActive = true;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+                throw new BadRequestException("An unexpected error occurred during Change User Status. Please try again.");
+
+            return Ok("User Activated successfully");
+        }
+
+        [HttpPost("deactivate-user")]
+        public async Task<IActionResult> DeactivateUser(string userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+                throw new BadRequestException("UserId is required");
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return NotFound("User not found");
+
+            user.IsActive = false;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+                throw new BadRequestException("An unexpected error occurred during Change User Status. Please try again.");
+
+            return Ok("User Deactivated successfully");
+        }
+
+        [HttpPatch("clinic-setprice")]
+        public async Task<IActionResult> SetClinicPrice([FromBody] double Price)
+        {
+            #region current user ClincId
+
+            var currentuser = await _userManager.GetUserAsync(User);
+            if (currentuser is null) throw new NotFoundException("Not Found user");
+
+            var userspec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == currentuser.Id);
+            var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
+            var ClincId = (await userrepository.GetEntityWithSpecAsync(userspec)).ClincId;
+            if (string.IsNullOrEmpty(ClincId))
+            {
+                throw new NotFoundException("Not Available Clinc for Current User");
+            }
+            #endregion
+
+            var Repo = _unitOfWork.Repository<Clinic>();
+            var spec = new BaseSpecification<Clinic>(e => e.Id == ClincId);
+            var result = await Repo.GetEntityWithSpecAsync(spec);
+            if (result is null)
+            {
+                throw new NotFoundException("No Clinic are currently defined in the system.");
+            }
+            result.Price = Price;
+            await Repo.UpdateAsync(result);
+            if (await _unitOfWork.CompleteAsync() <= 0)
+            {
+                throw new InternalServerException("An unexpected error occurred during Set Clinic Price. Please try again.");
+            }
+            return Ok(new ApiResponseDTO(200, "Price set Successfully"));
+        }
+
+        [HttpGet("clinic-data")]
+        public async Task<IActionResult> GetClinicData()
+        {
+            #region current user ClincId
+
+            var currentuser = await _userManager.GetUserAsync(User);
+            if (currentuser is null) throw new NotFoundException("Not Found user");
+
+            var userspec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == currentuser.Id);
+            var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
+            var ClincId = (await userrepository.GetEntityWithSpecAsync(userspec)).ClincId;
+            if (string.IsNullOrEmpty(ClincId))
+            {
+                throw new NotFoundException("Not Available Clinc for Current User");
+            }
+            #endregion
+            var Repo = _unitOfWork.Repository<Clinic>();
+            var spec = new BaseSpecification<Clinic>(e => e.Id == ClincId);
+            spec.AllIncludes.Add(q => q.Include(c => c.MedicalSpecialty));
+            var result = (await Repo.ListAsync(spec)).Select(e => new
+            {
+                e.Id,
+                e.Name,
+                e.Email,
+                e.AddressCountry,
+                e.AddressGovernRate,
+                e.AddressCity,
+                e.AddressLocation,
+                e.Phone,
+                e.Status,
+                e.Price,
+                MedicalSpecialty = new
+                {
+                    e.MedicalSpecialty?.Id,
+                    e.MedicalSpecialty?.Name
+                }
+            });
+            if (result is null)
+            {
+                throw new NotFoundException("No Clinic are currently defined in the system.");
+            }
+            return Ok(new ApiResponseDTO(200, "Clinic Data", result));
+        }
+
+
+        #region Helper
+        private static string ResetPasswordClinicUserTemplate(string NewPassword)
+        {
+            return $@"<!-- Email HTML template -->
+<!doctype html>
+<html lang=""en"">
+  <head>
+    <meta charset=""utf-8"" />
+    <meta name=""viewport"" content=""width=device-width,initial-scale=1"" />
+    <title>Account Info</title>
+  </head>
+  <body style=""margin:0;padding:0;background-color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;"">
+    <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""max-width:600px;margin:24px auto;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.06);"">
+      <tr>
+        <td style=""padding:20px 24px;text-align:left;"">
+          <h2 style=""margin:0 0 12px;font-size:20px;color:#111827;"">Hello, <span style=""font-weight:700"">{{{{FullName}}}}</span></h2>
+
+          <p style=""margin:0 0 18px;font-size:15px;color:#374151;line-height:1.5;"">
+            Your Password has been reseted. Below is your new password:
+          </p>
+
+          <div style=""display:inline-block;padding:12px 16px;border-radius:6px;background:#f3f4f6;border:1px solid #e5e7eb;margin-bottom:18px;"">
+            <strong style=""font-size:16px;letter-spacing:0.2px;"">Password:</strong>
+            <div style=""margin-top:6px;font-family: 'Courier New', Courier, monospace; font-size:16px;"">
+              {NewPassword}
+            </div>
+          </div>
+
+          <p style=""margin:0;font-size:13px;color:#6b7280;"">
+            For security, please change this password after your first login.
+          </p>
+        </td>
+      </tr>
+
+      <tr>
+        <td style=""padding:12px 24px;background:#fafafa;border-top:1px solid #f0f0f0;text-align:center;font-size:12px;color:#9ca3af;"">
+          This is an automated message — please do not reply.
+        </td>
+      </tr>
+    </table>
+
+    <!-- Plain-text fallback for clients that strip HTML -->
+    <div style=""display:none;white-space:nowrap;font:15px/1px monospace;color:#fff;max-height:0;overflow:hidden;"">
+      Hello {{{{FullName}}}} — Your new password: {{{{NewPassword}}}} — Please change it after first login.
+    </div>
+  </body>
+</html>
+
+";
+        }
+        #endregion
+
     }
     #region ClincUser
 
@@ -411,16 +653,16 @@ namespace Base.API.Controllers
     }
 
     #endregion
-   
+
     #region DoctorSchedule
     public class DoctorScheduleDTO
     {
-        public  string? ClincId { get; set; }
+        public string? ClincId { get; set; }
 
         [Required]
         public required string DoctorId { get; set; }
 
-        [Required] 
+        [Required]
         public required int SlotDurationMinutes { get; set; }
         public ICollection<SlotsDTO> slots { get; set; } = new List<SlotsDTO>();
 
@@ -458,7 +700,13 @@ namespace Base.API.Controllers
         }
     }
     #endregion
-
+    public class ClinicUserResetPasswordDTO
+    {
+        [Required]
+        public required string UserId { get; set; }
+        [Required]
+        public required string NewPassword { get; set; }
+    }
     enum AvailableUserTypesForCreateUsers
     {
         ClinicDoctor,

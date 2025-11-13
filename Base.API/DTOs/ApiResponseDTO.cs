@@ -7,6 +7,7 @@
         public object Data { get; set; }
         public string TraceId { get; set; }
 
+        public ApiResponseDTO() { }
         public ApiResponseDTO(int statusCode, string message, object data = null, string traceId = null)
         {
             StatusCode = statusCode;

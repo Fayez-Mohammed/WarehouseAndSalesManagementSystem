@@ -31,13 +31,13 @@ namespace Base.API.Controllers
     [Authorize(Roles = "SystemAdmin")]
     [Authorize(Policy = "ActiveUserOnly")]
 
-    public class ClincController : ControllerBase
+    public class ClinicController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IEmailSender _emailSender;
 
-        public ClincController(UserManager<ApplicationUser> userManager, IUnitOfWork unitOfWork, IEmailSender emailSender)
+        public ClinicController(UserManager<ApplicationUser> userManager, IUnitOfWork unitOfWork, IEmailSender emailSender)
         {
             _userManager = userManager;
             _unitOfWork = unitOfWork;
@@ -58,7 +58,7 @@ namespace Base.API.Controllers
         /// review.</returns>
         /// <exception cref="BadRequestException">Thrown if the provided registration details are invalid, if a clinic with the same email address already
         /// exists,  or if an error occurs during the registration process.</exception>
-        [HttpPost("clinic-request")]
+        [HttpPost("create-clinicrequest")]
         [AllowAnonymous]
         public async Task<IActionResult> CreateClinic([FromBody] ClincRegistrationDTO model)
         {
@@ -75,7 +75,10 @@ namespace Base.API.Controllers
                 var _Clinc = model.ToClinc();
                 await ClincRepo.AddAsync(_Clinc);
                 if (await _unitOfWork.CompleteAsync() > 0)
-                    return Ok(new ApiResponseDTO(200, "We have received your request, and it is currently under review. An email will be sent after the review."));
+                    return Ok(new
+                    {
+                        message = "We have received your request, and it is currently under review. An email will be sent after the review."
+                    });
             }
             throw new BadRequestException("An error occurred, please try again later.");
         }
@@ -128,7 +131,7 @@ namespace Base.API.Controllers
             {
                 throw new NotFoundException("No Clinc requests are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Requests", result));
+            return Ok(new { message = "All Requests", result });
         }
 
         /// <summary>
@@ -147,17 +150,17 @@ namespace Base.API.Controllers
         /// <exception cref="BadRequestException">Thrown if <paramref name="ClincId"/> is null, empty, or if the operation fails due to invalid input or email
         /// sending issues.</exception>
         /// <exception cref="NotFoundException">Thrown if no clinic is found with the specified <paramref name="ClincId"/>.</exception>
-        [HttpPatch("approve-Clinc-request")]
-        public async Task<IActionResult> ApproveClinicsRequests([FromBody] string ClincId)
+        [HttpPatch("approve-clinic-request")]
+        public async Task<IActionResult> ApproveClinicsRequests([FromBody] string ClinicId)
         {
-            if (string.IsNullOrEmpty(ClincId)) throw new BadRequestException("ClincId is required");
+            if (string.IsNullOrEmpty(ClinicId)) throw new BadRequestException("ClinicId is required");
 
             var ClincRepo = _unitOfWork.Repository<Clinic>();
-            var spec = new BaseSpecification<Clinic>(c => c.Id == ClincId);
+            var spec = new BaseSpecification<Clinic>(c => c.Id == ClinicId);
             spec.AllIncludes.Add(c => c.Include(_c => _c.MedicalSpecialty));
             var request = await ClincRepo.GetEntityWithSpecAsync(spec);
 
-            if (request is null) throw new NotFoundException("ClincId not found");
+            if (request is null) throw new NotFoundException("ClinicId not found");
             request.Status = ClinicStatus.active.ToString();
             await ClincRepo.UpdateAsync(request);
             if (await _unitOfWork.CompleteAsync() > 0)
@@ -188,14 +191,14 @@ namespace Base.API.Controllers
                         await _userManager.AddToRoleAsync(ClincadminUser, "ClincAdmin");
                         try
                         {
-                            await _emailSender.SendEmailAsync(request.Email, "Clinc Add Request Acceptance",
+                            await _emailSender.SendEmailAsync(request.Email, "Clinic Add Request Acceptance",
                                 ApproveClinicsRequestsMail(request.Name, request.Email, password));
                         }
                         catch (Exception ex)
                         {
                             throw new BadRequestException("Failed to send mail");
                         }
-                        return Ok(new ApiResponseDTO(200, "Clinc Now Available in System"));
+                        return Ok(new { message = "Clinic Now Available in System" });
                     }
                 }
             }
@@ -252,7 +255,7 @@ namespace Base.API.Controllers
             {
                 throw new NotFoundException("No Clincs are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Requests", result));
+            return Ok(new { message = "All Requests", result });
         }
 
         /// <summary>
@@ -264,15 +267,15 @@ namespace Base.API.Controllers
         /// <exception cref="BadRequestException">Thrown if <paramref name="ClincId"/> is null or empty.</exception>
         /// <exception cref="NotFoundException">Thrown if the activation process fails, indicating the clinic could not be found or updated.</exception>
         [HttpPatch("activate-Clinic")]
-        public async Task<IActionResult> ActivateClinic(string ClincId)
+        public async Task<IActionResult> ActivateClinic(string ClinicId)
         {
-            if (string.IsNullOrEmpty(ClincId)) throw new BadRequestException("ClincId is Required");
-            var result = await ChangeClinicStatusAsync(c => c.Id == ClincId, ClinicStatus.active);
+            if (string.IsNullOrEmpty(ClinicId)) throw new BadRequestException("ClinicId is Required");
+            var result = await ChangeClinicStatusAsync(c => c.Id == ClinicId, ClinicStatus.active);
             if (result)
             {
-                throw new NotFoundException("Faild To Activate Clinc");
+                throw new NotFoundException("Faild To Activate Clinic");
             }
-            return Ok(new ApiResponseDTO(200, "Clinc Activated"));
+            return Ok(new { message = "Clinic Activated" });
         }
 
         /// <summary>
@@ -285,15 +288,15 @@ namespace Base.API.Controllers
         /// <exception cref="BadRequestException">Thrown if <paramref name="ClincId"/> is null or empty.</exception>
         /// <exception cref="NotFoundException">Thrown if the operation fails to deactivate the clinic.</exception>
         [HttpPatch("deactivate-clinic")]
-        public async Task<IActionResult> DeactivateClinic(string ClincId)
+        public async Task<IActionResult> DeactivateClinic(string ClinicId)
         {
-            if (string.IsNullOrEmpty(ClincId)) throw new BadRequestException("ClincId is Required");
-            var result = await ChangeClinicStatusAsync(c => c.Id == ClincId, ClinicStatus.notactive);
+            if (string.IsNullOrEmpty(ClinicId)) throw new BadRequestException("ClinicId is Required");
+            var result = await ChangeClinicStatusAsync(c => c.Id == ClinicId, ClinicStatus.notactive);
             if (result)
             {
-                throw new NotFoundException("Faild To Deactivate Clinc");
+                throw new NotFoundException("Faild To Deactivate Clinic");
             }
-            return Ok(new ApiResponseDTO(200, "Clinc Deactivated"));
+            return Ok(new { message = "Clinic Deactivated" });
         }
 
         /// <summary>
@@ -306,16 +309,16 @@ namespace Base.API.Controllers
         /// collection of clinic administrators. Each administrator is represented by their user ID and full name.</returns>
         /// <exception cref="NotFoundException">Thrown if no administrators are defined for the specified clinic.</exception>
         [HttpGet("clinic-adminusers")]
-        public async Task<IActionResult> GetClinicAdmins(string ClincId)
+        public async Task<IActionResult> GetClinicAdmins(string ClinicId)
         {
             var Repo = _unitOfWork.Repository<ClincAdminProfile>();
-            var spec = new BaseSpecification<ClincAdminProfile>(e => e.ClincId == ClincId);
+            var spec = new BaseSpecification<ClincAdminProfile>(e => e.ClincId == ClinicId);
             var list = (await Repo.ListAsync(spec)).Select(e => new { e.User?.Id, e.User?.FullName }).ToHashSet();
             if (!list.Any())
             {
-                throw new NotFoundException("No Admin are currently defined in this Clinc.");
+                throw new NotFoundException("No Admin are currently defined in this Clinic.");
             }
-            return Ok(new ApiResponseDTO(200, "All Clinc Admins", list));
+            return Ok(new { message = "All Clinic Admins", list });
         }
 
         /// <summary>
@@ -333,7 +336,7 @@ namespace Base.API.Controllers
         /// be sent.</exception>
         /// <exception cref="NotFoundException">Thrown if no user is found with the specified administrator ID.</exception>
         /// <exception cref="InternalServerException">Thrown if an unexpected error occurs during the password reset process.</exception>
-        [HttpPost("clincadmin-resetpassword")]
+        [HttpPost("clinicadmin-resetpassword")]
         public async Task<IActionResult> ResetPasswordforClinicAdmin([FromBody] ClincAdminResetPasswordDTO model)
         {
             if (!ModelState.IsValid)
@@ -368,7 +371,7 @@ namespace Base.API.Controllers
                     throw new BadRequestException("Password Reseted Successfully but Failed to send mail");
                 }
                 // 3. Success response
-                return Ok(new ApiResponseDTO(200, "Password Reset successfully."));
+                return Ok(new { message = "Password Reset successfully." });
             }
             catch (Exception ex)
             {

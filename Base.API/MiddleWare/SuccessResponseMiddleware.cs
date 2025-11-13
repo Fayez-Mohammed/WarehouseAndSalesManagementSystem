@@ -16,6 +16,126 @@ namespace Base.API.MiddleWare
 
         public async Task InvokeAsync(HttpContext context)
         {
+            if (context.Request.Path.StartsWithSegments("/hangfire"))
+            {
+                await _next(context);
+                return;
+            }
+
+            var originalBodyStream = context.Response.Body;
+            await using var responseBody = new MemoryStream();
+            context.Response.Body = responseBody;
+
+            try
+            {
+                await _next(context);
+            }
+            catch
+            {
+                context.Response.Body = originalBodyStream;
+                throw;
+            }
+
+            responseBody.Seek(0, SeekOrigin.Begin);
+            var bodyText = await new StreamReader(responseBody).ReadToEndAsync();
+
+            if (context.Response.StatusCode >= 200 && context.Response.StatusCode < 300)
+            {
+                string traceId = context.TraceIdentifier ?? Guid.NewGuid().ToString();
+                int statusCode = context.Response.StatusCode;
+                string message = "Success";
+                object? data = null;
+
+                if (!string.IsNullOrWhiteSpace(bodyText))
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(bodyText);
+                        var root = doc.RootElement;
+
+                        // لو response هو JSON object
+                        if (root.ValueKind == JsonValueKind.Object)
+                        {
+                            var dict = new Dictionary<string, object?>();
+
+                            foreach (var prop in root.EnumerateObject())
+                            {
+                                // شيل statusCode و message من البيانات
+                                if (prop.NameEquals("statusCode"))
+                                    statusCode = prop.Value.GetInt32();
+                                else if (prop.NameEquals("message"))
+                                    message = prop.Value.GetString() ?? message;
+                                else
+                                    dict[prop.Name] = JsonSerializer.Deserialize<object>(prop.Value.GetRawText());
+                            }
+
+                            data = dict;
+                        }
+                        else
+                        {
+                            // لو مش object (مثلا array) نحطه كله في data
+                            data = JsonSerializer.Deserialize<object>(bodyText);
+                        }
+                    }
+                    catch
+                    {
+                        message = bodyText.Trim('"', '\'');
+                    }
+                }
+
+                var apiResponse = new
+                {
+                    statusCode,
+                    message,
+                    traceId,
+                    data
+                };
+
+                var jsonResponse = JsonSerializer.Serialize(apiResponse, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    WriteIndented = true
+                });
+
+                await WriteResponseAsync(context, originalBodyStream, jsonResponse);
+            }
+            else
+            {
+                responseBody.Seek(0, SeekOrigin.Begin);
+                await responseBody.CopyToAsync(originalBodyStream);
+            }
+        }
+
+        private static async Task WriteResponseAsync(HttpContext context, Stream originalBodyStream, string jsonResponse)
+        {
+            context.Response.Body = originalBodyStream;
+            context.Response.ContentType = "application/json; charset=utf-8";
+            context.Response.ContentLength = System.Text.Encoding.UTF8.GetByteCount(jsonResponse);
+            await context.Response.WriteAsync(jsonResponse);
+        }
+    }
+}
+
+
+
+/*using Base.API.DTOs;
+using System.Text.Json;
+
+namespace Base.API.MiddleWare
+{
+    public class SuccessResponseMiddleware
+    {
+        private readonly RequestDelegate _next;
+        private readonly ILogger<SuccessResponseMiddleware> _logger;
+
+        public SuccessResponseMiddleware(RequestDelegate next, ILogger<SuccessResponseMiddleware> logger)
+        {
+            _next = next;
+            _logger = logger;
+        }
+
+        public async Task InvokeAsync(HttpContext context)
+        {
             // تخطي أي شيء يبدأ بـ /hangfire
             if (context.Request.Path.StartsWithSegments("/hangfire"))
             {
@@ -109,4 +229,4 @@ namespace Base.API.MiddleWare
         }
     }
 
-}
+}*/

@@ -64,6 +64,7 @@ namespace Base.DAL.Models
         public string? AddressLocation { get; set; }
         public string? Phone { get; set; }
         public string Status { get; set; }
+        public double Price { get; set; }
 
         //public ICollection<ClincProfile> ClincAdmin { get; set; } = new HashSet<ClincProfile>();
 
