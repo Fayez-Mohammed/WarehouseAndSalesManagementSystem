@@ -438,7 +438,7 @@ namespace Base.API.Controllers
             {
                 throw new BadRequestException("User Created Successfully but Failed to send mail");
             }
-            return Ok(new ApiResponseDTO(200, $"'{model.FullName}' is Now Admin for ClinicId '{model.ClincId}'"));
+            return Ok(new { message = $"'{model.FullName}' is Now Admin for ClinicId '{model.ClincId}'" });
 
 
         }

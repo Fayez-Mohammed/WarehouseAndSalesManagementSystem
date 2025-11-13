@@ -26,13 +26,13 @@ namespace Base.API.Controllers
     [Authorize(Roles = "ClincAdmin")]
     [Authorize(Policy = "ActiveUserOnly")]
 
-    public class ClincManagementController : ControllerBase
+    public class ClinicManagementController : ControllerBase
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IEmailSender _emailSender;
 
-        public ClincManagementController(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager, IEmailSender emailSender)
+        public ClinicManagementController(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager, IEmailSender emailSender)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
@@ -40,7 +40,7 @@ namespace Base.API.Controllers
         }
 
         [HttpPost("create-clinic-user")]
-        public async Task<IActionResult> CreateClincUser([FromBody] ClincUserDTO model)
+        public async Task<IActionResult> CreateClinicUser([FromBody] ClincUserDTO model)
         {
 
             if (!ModelState.IsValid)
@@ -120,7 +120,7 @@ namespace Base.API.Controllers
                     await transaction.CommitAsync();
                     await _emailSender.SendEmailAsync(user.Email, "Registration Completed",
                $"<p>Your Password is: <b>{model.Password}</b>");
-                    return Ok(new ApiResponseDTO(201, "Clinc user registered successfully.", null));
+                    return Ok(new { statusCode = 201, message = "Clinc user registered successfully." });
                 }
                 else
                 {
@@ -136,7 +136,7 @@ namespace Base.API.Controllers
         }
 
         [HttpGet("doctors")]
-        public async Task<IActionResult> GetClincDoctors()
+        public async Task<IActionResult> GetClinicDoctors()
         {
             var currentuser = await _userManager.GetUserAsync(User);
             if (currentuser is null) throw new NotFoundException("Not Found user");
@@ -159,9 +159,9 @@ namespace Base.API.Controllers
 
             if (!list.Any())
             {
-                throw new NotFoundException("No Clinc requests are currently defined in the system.");
+                throw new NotFoundException("No Clinic requests are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Doctors", list));
+            return Ok(new { message = "All Doctors", list });
         }
 
         [HttpGet("clinic-users")]
@@ -215,21 +215,21 @@ namespace Base.API.Controllers
             {
                 throw new NotFoundException("No Clinic requests are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Clinic Users", result));
+            return Ok(new { message = "All Clinic Users", result });
         }
 
-        [HttpGet("user-types")]
-        public async Task<IActionResult> GetUserTypes()
-        {
-            var Repo = _unitOfWork.Repository<UserType>();
-            var spec = new BaseSpecification<UserType>();
-            var list = (await Repo.ListAsync(spec)).Select(e => e.Name).ToHashSet<string>();
-            if (!list.Any())
-            {
-                throw new NotFoundException("No User Types are currently defined in the system.");
-            }
-            return Ok(new ApiResponseDTO(200, "All User Types", list));
-        }
+        //[HttpGet("user-types")]
+        //public async Task<IActionResult> GetUserTypes()
+        //{
+        //    var Repo = _unitOfWork.Repository<UserType>();
+        //    var spec = new BaseSpecification<UserType>();
+        //    var list = (await Repo.ListAsync(spec)).Select(e => e.Name).ToHashSet<string>();
+        //    if (!list.Any())
+        //    {
+        //        throw new NotFoundException("No User Types are currently defined in the system.");
+        //    }
+        //    return Ok(new ApiResponseDTO(200, "All User Types", list));
+        //}
 
         [HttpPost("create-doctor-schedule")]
         public async Task<IActionResult> CreateDoctorSchedule([FromBody] DoctorScheduleDTO model)
@@ -252,7 +252,7 @@ namespace Base.API.Controllers
             model.ClincId = (await userrepository.GetEntityWithSpecAsync(spec)).ClincId;
             if (string.IsNullOrEmpty(model.ClincId))
             {
-                throw new NotFoundException("The specified Clinc does not exist.");
+                throw new NotFoundException("The specified Clinic does not exist.");
             }
 
             // 2. Transaction Setup (using statement ensures Dispose/Rollback on failure)
@@ -266,14 +266,14 @@ namespace Base.API.Controllers
                 }
                 catch (Exception ex)
                 {
-                    throw new BadRequestException("Clinc Schedule data format is invalid.");
+                    throw new BadRequestException("Clinic Schedule data format is invalid.");
                 }
                 var repo = _unitOfWork.Repository<ClinicSchedule>();
                 await repo.AddRangeAsync(Schedules);
                 if (await _unitOfWork.CompleteAsync() > 0)
                 {
                     await transaction.CommitAsync();
-                    return Ok(new ApiResponseDTO(200, "Doctor Schedule added successfully."));
+                    return Ok(new { message = "Doctor Schedule added successfully." });
                 }
                 else
                 {
@@ -313,7 +313,7 @@ namespace Base.API.Controllers
             {
                 throw new NotFoundException("No Clinic Schedule are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Clinic Schedule ", list));
+            return Ok(new { message = "All Clinic Schedule ", list });
         }
 
         [HttpGet("clinic-appointmentSlots")]
@@ -341,7 +341,7 @@ namespace Base.API.Controllers
             {
                 throw new NotFoundException("No Appointments are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Appointments", list));
+            return Ok(new { message = "All Appointments", list });
         }
 
         [HttpGet("available-usertypes")]
@@ -352,7 +352,7 @@ namespace Base.API.Controllers
             {
                 throw new NotFoundException("No User Types are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All UserTypes", result));
+            return Ok(new { message = "All UserTypes", result });
         }
 
         [HttpPost("clinicuser-resetpassword")]
@@ -390,7 +390,7 @@ namespace Base.API.Controllers
                     throw new BadRequestException("Password Reseted Successfully but Failed to send mail");
                 }
                 // 3. Success response
-                return Ok(new ApiResponseDTO(200, "Password Reset successfully."));
+                return Ok(new { message = "Password Reset successfully." });
             }
             catch (Exception ex)
             {
@@ -466,7 +466,7 @@ namespace Base.API.Controllers
             {
                 throw new InternalServerException("An unexpected error occurred during Set Clinic Price. Please try again.");
             }
-            return Ok(new ApiResponseDTO(200, "Price set Successfully"));
+            return Ok(new { message = "Price set Successfully" });
         }
 
         [HttpGet("clinic-data")]
@@ -510,7 +510,7 @@ namespace Base.API.Controllers
             {
                 throw new NotFoundException("No Clinic are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "Clinic Data", result));
+            return Ok(new { message = "Clinic Data", result });
         }
 
 
