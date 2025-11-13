@@ -16,6 +16,7 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
+using System.Linq.Expressions;
 using static System.Net.WebRequestMethods;
 
 namespace Base.API.Controllers
@@ -23,6 +24,8 @@ namespace Base.API.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize(Roles = "ClincAdmin")]
+    [Authorize(Policy = "ActiveUserOnly")]
+
     public class ClincManagementController : ControllerBase
     {
         private readonly IUnitOfWork _unitOfWork;
@@ -45,6 +48,10 @@ namespace Base.API.Controllers
                 var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
                 throw new BadRequestException(errors);
             }
+            
+            AvailableUserTypesForCreateUsers searchTypeEnum;
+            if (!Enum.TryParse<AvailableUserTypesForCreateUsers>(model.UserType, true, out searchTypeEnum))
+                throw new InternalServerException("Invalid user type specified.");
 
             var existingUser = await _userManager.FindByEmailAsync(model.Email);
             if (existingUser != null)
@@ -54,9 +61,7 @@ namespace Base.API.Controllers
             await using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
-
                 // 3. Mapping and Identity Creation
-                //var user = MapAndCreateUser(model);
                 ApplicationUser user;
                 try
                 {
@@ -66,6 +71,7 @@ namespace Base.API.Controllers
                 {
                     throw new BadRequestException("Registration data format is invalid.");
                 }
+              
                 // 4. Identity Creation - الآن نستخدم await بشكل صحيح
                 var createUserResult = await _userManager.CreateAsync(user, model.Password);
                 if (createUserResult is null)
@@ -73,15 +79,16 @@ namespace Base.API.Controllers
                 if (!createUserResult.Succeeded)
                     throw new BadRequestException(createUserResult.Errors.Select(e => e.Description));
                 model.UserId = user.Id;
-                //await AssignUserRoleAsync(user);
-                var Role = model.UserType switch
-                {
-                    "ClincDoctor" => "ClincDoctor",
-                    "ClincReceptionis" => "ClincReceptionis",
-                    _ => throw new BadRequestException("Invalid user type specified."),
-                };
+             
 
-                var roleResult = await _userManager.AddToRoleAsync(user, Role);
+                //var Role = model.UserType switch
+                //{
+                //    "ClincDoctor" => "ClincDoctor",
+                //    "ClincReceptionis" => "ClincReceptionis",
+                //    _ => throw new BadRequestException("Invalid user type specified."),
+                //};
+
+                var roleResult = await _userManager.AddToRoleAsync(user, searchTypeEnum.ToString());
                 if (!roleResult.Succeeded)
                 {
                     // توحيد طريقة رمي الاستثناءات لتشمل رسائل الخطأ من Identity
@@ -99,19 +106,25 @@ namespace Base.API.Controllers
                 {
                     throw new NotFoundException("The specified Clinc does not exist.");
                 }
-
-                if (model.UserType == "ClincDoctor")
+                switch (searchTypeEnum)
                 {
-                    var ClincDoctorRepository = _unitOfWork.Repository<ClincDoctorProfile>();
-                    var profile = model.ToClincDoctor();
-                    await ClincDoctorRepository.AddAsync(profile);
+                    case AvailableUserTypesForCreateUsers.ClinicDoctor:
+                        var ClinicDoctorRepository = _unitOfWork.Repository<ClincDoctorProfile>();
+                        var Doctorprofile = model.ToClincDoctor();
+                        await ClinicDoctorRepository.AddAsync(Doctorprofile);
+                        break;
+                    case AvailableUserTypesForCreateUsers.ClinicReceptionist:
+                        var ClinicReceptionistRepository = _unitOfWork.Repository<ClincReceptionistProfile>();
+                        var Receptionistprofile = model.ToClincReceptionist();
+                        await ClinicReceptionistRepository.AddAsync(Receptionistprofile);
+                        break;
+                    case AvailableUserTypesForCreateUsers.ClinicAdmin:
+                        var ClinicAdminRepository = _unitOfWork.Repository<ClincAdminProfile>();
+                        var Adminprofile = model.ToClincAdminProfile();
+                        await ClinicAdminRepository.AddAsync(Adminprofile);
+                        break;
                 }
-                else if (model.UserType == "ClincReceptionis")
-                {
-                    var ClincReceptionistRepository = _unitOfWork.Repository<ClincReceptionistProfile>();
-                    var profile = model.ToClincReceptionist();
-                    await ClincReceptionistRepository.AddAsync(profile);
-                }
+               
                 // 6. Commit Transaction
                 if (await _unitOfWork.CompleteAsync() > 0)
                 {
@@ -255,8 +268,8 @@ namespace Base.API.Controllers
             }
         }
 
-        [HttpGet("Clinc-schedule")]
-        public async Task<IActionResult> GetClincSchedule()
+        [HttpGet("clinic-schedule")]
+        public async Task<IActionResult> GetClinicSchedule()
         {
             var cuurentuser = await _userManager.GetUserAsync(User);
             if (cuurentuser is null) throw new NotFoundException("Not Found user");
@@ -278,7 +291,7 @@ namespace Base.API.Controllers
             return Ok(new ApiResponseDTO(200, "All Clinc Schedule ", list));
         }
 
-        [HttpGet("Clinc-AppointmentSlots")]
+        [HttpGet("clinic-appointmentSlots")]
         public async Task<IActionResult> GetAppointmentSlots([FromBody] bool IsBooked)
         {
             var currentuser = await _userManager.GetUserAsync(User);
@@ -299,6 +312,17 @@ namespace Base.API.Controllers
                 throw new NotFoundException("No Appointments are currently defined in the system.");
             }
             return Ok(new ApiResponseDTO(200, "All Appointments", list));
+        }
+
+        [HttpGet("available-usertypes")]
+        public async Task<IActionResult> GetAvailableUserTypesForCreateUsers()
+        {
+            var result = Enum.GetNames(typeof(AvailableUserTypesForCreateUsers)).ToList();
+            if (!result.Any())
+            {
+                throw new NotFoundException("No User Types are currently defined in the system.");
+            }
+            return Ok(new ApiResponseDTO(200, "All UserTypes", result));
         }
     }
     #region ClincUser
@@ -371,6 +395,19 @@ namespace Base.API.Controllers
                 ClincId = Dto.ClincId
             };
         }
+        public static ClincAdminProfile ToClincAdminProfile(this ClincUserDTO Dto)
+        {
+            if (Dto is null)
+            {
+                return new ClincAdminProfile();
+            }
+
+            return new ClincAdminProfile
+            {
+                UserId = Dto.UserId,
+                ClincId = Dto.ClincId
+            };
+        }
     }
 
     #endregion
@@ -419,6 +456,13 @@ namespace Base.API.Controllers
 
             return schedules;
         }
-    } 
+    }
     #endregion
+
+    enum AvailableUserTypesForCreateUsers
+    {
+        ClinicDoctor,
+        ClinicReceptionist,
+        ClinicAdmin
+    }
 }

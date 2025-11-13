@@ -1,4 +1,5 @@
-﻿using Base.API.Filters;
+﻿using Base.API.Authorization;
+using Base.API.Filters;
 using Base.API.Helper;
 using Base.DAL.Contexts;
 using Base.DAL.Models;
@@ -10,6 +11,7 @@ using Base.Services.Interfaces;
 using Hangfire;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
@@ -31,11 +33,12 @@ namespace Base.API.Services
 
             #region Configure services
             // 1️⃣ ربط DbContext من DAL مع SQL Server
-            services.AddDbContext<AppDbContext>(options => {
+            services.AddDbContext<AppDbContext>(options =>
+            {
                 options.UseLazyLoadingProxies();
                 options.UseSqlServer(_configuration.GetConnectionString("DefaultConnection"));
-                
-                });
+
+            });
 
             // 2️⃣ إعداد Identity
             services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -84,6 +87,8 @@ namespace Base.API.Services
             services.AddTransient<IEmailSender, EmailService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IAuthorizationHandler, ActiveUserHandler>();
+            services.AddScoped<IClinicServices, ClinicServices>();
 
             // 💡 إضافة Caching للتحكم في استجابات المتصفحات (وقائي)
             services.AddResponseCaching();
@@ -176,8 +181,41 @@ namespace Base.API.Services
                     .UseSqlServerStorage(_configuration.GetConnectionString("DefaultConnection")));
             services.AddHangfireServer();
             services.AddScoped<AppointmentSlotGeneratorJob>();
-            Console.WriteLine("✅ Hangfire server configured successfully");
 
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("ActiveUserOnly", policy =>
+                    policy.Requirements.Add(new ActiveUserRequirement()));
+            });
+
+            services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme,
+            options =>
+                    {options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+                        {
+                            OnChallenge = context =>
+                            {
+                                // منع الـ Default 403 Response
+                                context.HandleResponse();
+                                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                                context.Response.ContentType = "application/json";
+                                var result = System.Text.Json.JsonSerializer.Serialize(new
+                                {
+                                    error = "Unauthorized or inactive account"
+                                });
+                                return context.Response.WriteAsync(result);
+                            },
+                            OnForbidden = context =>
+                            {
+                                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                                context.Response.ContentType = "application/json";
+                                var result = System.Text.Json.JsonSerializer.Serialize(new
+                                {
+                                    error = "User account is inactive"
+                                });
+                                return context.Response.WriteAsync(result);
+                            }
+                        };
+                    });
             #endregion
             return services;
         }

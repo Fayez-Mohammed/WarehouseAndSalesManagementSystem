@@ -28,6 +28,9 @@ namespace Base.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "SystemAdmin")]
+    [Authorize(Policy = "ActiveUserOnly")]
+
     public class ClincController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
@@ -87,7 +90,6 @@ namespace Base.API.Controllers
         /// <returns></returns>
         /// <exception cref="Base.Services.Implementations.NotFoundException">No Clinc requests are currently defined in the system.</exception>
         [HttpGet("clinics-requests")]
-        [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> GetClinicsRequests(string? searchType = null, string? valueToSearch = null, int pageIndex = 1, int pageSize = 10)
         {
             Expression<Func<Clinic, bool>> CriteriaExpression;
@@ -146,7 +148,6 @@ namespace Base.API.Controllers
         /// sending issues.</exception>
         /// <exception cref="NotFoundException">Thrown if no clinic is found with the specified <paramref name="ClincId"/>.</exception>
         [HttpPatch("approve-Clinc-request")]
-        [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> ApproveClinicsRequests([FromBody] string ClincId)
         {
             if (string.IsNullOrEmpty(ClincId)) throw new BadRequestException("ClincId is required");
@@ -212,7 +213,6 @@ namespace Base.API.Controllers
         /// <returns></returns>
         /// <exception cref="Base.Services.Implementations.NotFoundException">No Clincs are currently defined in the system.</exception>
         [HttpGet("system-clinics")]
-        [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> GetSystemClinics(string? searchType = null, string? valueToSearch = null, int pageIndex = 1, int pageSize = 10)
         {
             Expression<Func<Clinic, bool>> CriteriaExpression;
@@ -264,7 +264,6 @@ namespace Base.API.Controllers
         /// <exception cref="BadRequestException">Thrown if <paramref name="ClincId"/> is null or empty.</exception>
         /// <exception cref="NotFoundException">Thrown if the activation process fails, indicating the clinic could not be found or updated.</exception>
         [HttpPatch("activate-Clinic")]
-        [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> ActivateClinic(string ClincId)
         {
             if (string.IsNullOrEmpty(ClincId)) throw new BadRequestException("ClincId is Required");
@@ -286,7 +285,6 @@ namespace Base.API.Controllers
         /// <exception cref="BadRequestException">Thrown if <paramref name="ClincId"/> is null or empty.</exception>
         /// <exception cref="NotFoundException">Thrown if the operation fails to deactivate the clinic.</exception>
         [HttpPatch("deactivate-clinic")]
-        [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> DeactivateClinic(string ClincId)
         {
             if (string.IsNullOrEmpty(ClincId)) throw new BadRequestException("ClincId is Required");
@@ -308,7 +306,6 @@ namespace Base.API.Controllers
         /// collection of clinic administrators. Each administrator is represented by their user ID and full name.</returns>
         /// <exception cref="NotFoundException">Thrown if no administrators are defined for the specified clinic.</exception>
         [HttpGet("clinic-adminusers")]
-        [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> GetClinicAdmins(string ClincId)
         {
             var Repo = _unitOfWork.Repository<ClincAdminProfile>();
@@ -337,7 +334,6 @@ namespace Base.API.Controllers
         /// <exception cref="NotFoundException">Thrown if no user is found with the specified administrator ID.</exception>
         /// <exception cref="InternalServerException">Thrown if an unexpected error occurs during the password reset process.</exception>
         [HttpPost("clincadmin-resetpassword")]
-        [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> ResetPasswordforClinicAdmin([FromBody] ClincAdminResetPasswordDTO model)
         {
             if (!ModelState.IsValid)
@@ -396,7 +392,6 @@ namespace Base.API.Controllers
         /// <exception cref="BadRequestException">Thrown if the input model is invalid, the email already exists, the user creation fails, or the email
         /// notification cannot be sent.</exception>
         [HttpPost("create-clinicadmin")]
-        [Authorize(Roles = "SystemAdmin")]
         public async Task<IActionResult> CreateClinicAdmin([FromBody] ClincAdminProfileCreateDTO model)
         {
             if (!ModelState.IsValid)
@@ -554,6 +549,7 @@ namespace Base.API.Controllers
             var pagination = new Pagination<ClincDTO>(pageIndex, pageSize, totalItems, result);
             return pagination;
         }
+        
 
         private async Task<bool> ChangeClinicStatusAsync(Expression<Func<Clinic, bool>> CriteriaExpression, ClinicStatus status)
         {
