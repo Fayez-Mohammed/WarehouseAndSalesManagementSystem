@@ -190,7 +190,7 @@ namespace Base.API.Services
 
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme,
             options =>
-                    {options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+                    {options.Events = new JwtBearerEvents
                         {
                             OnChallenge = context =>
                             {
@@ -198,7 +198,7 @@ namespace Base.API.Services
                                 context.HandleResponse();
                                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                                 context.Response.ContentType = "application/json";
-                                var result = System.Text.Json.JsonSerializer.Serialize(new
+                                var result = JsonSerializer.Serialize(new
                                 {
                                     error = "Unauthorized or inactive account"
                                 });
@@ -208,7 +208,7 @@ namespace Base.API.Services
                             {
                                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                                 context.Response.ContentType = "application/json";
-                                var result = System.Text.Json.JsonSerializer.Serialize(new
+                                var result = JsonSerializer.Serialize(new
                                 {
                                     error = "User account is inactive"
                                 });
