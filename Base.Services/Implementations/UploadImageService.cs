@@ -32,12 +32,14 @@ namespace Base.Services.Implementations
 
             if (!allowedExt.Contains(ext))
                 throw new Exception("Invalid file type");
+            var nameWithoutExt = Path.GetFileNameWithoutExtension(file.FileName);
 
             // اسم الصورة الجديد
-            var fileName = $"{file.FileName}_{Guid.NewGuid()}{ext}";
+            var fileName = $"{nameWithoutExt}_{Guid.NewGuid()}{ext}";
+            var webRoot = _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
 
             // مكان الحفظ
-            var folderPath = Path.Combine(_env.WebRootPath, "uploads");
+            var folderPath = Path.Combine(webRoot, "uploads");
             if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
 
             var filePath = Path.Combine(folderPath, fileName);
@@ -56,8 +58,7 @@ namespace Base.Services.Implementations
             var request = _httpContextAccessor.HttpContext?.Request;
 
             var baseUrl = $"{request.Scheme}://{request.Host}";
-
-            return $"{baseUrl}/{path}";
+            return $"{baseUrl}/{path.Replace("\\", "/")}";
         }
     }
 

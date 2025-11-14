@@ -522,7 +522,7 @@ namespace Base.API.Controllers
             return Ok(new { message = "Clinic Data", result });
         }
 
-        [HttpPost("clinic-setlogo")]
+        [HttpPatch("clinic-setlogo")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> SetClinicLogo([FromForm] ClinicLogoDTO model)
         {
@@ -553,7 +553,13 @@ namespace Base.API.Controllers
             {
                 throw new InternalServerException("An unexpected error occurred during Upload Clinic Logo. Please try again.");
             }
-            return Ok(new { message = "Logo Uploaded Successfully" });
+            var logoUrl = await _uploadImageService.GetImageAsync(result.LogoPath);
+
+            return Ok(new
+            {
+                message = "Logo uploaded successfully",
+                logoUrl
+            });
         }
 
         #region Helper

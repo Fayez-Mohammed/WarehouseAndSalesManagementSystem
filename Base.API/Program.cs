@@ -15,11 +15,16 @@ internal class Program
 {
     private static async Task Main(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            Args = args,
+            WebRootPath = "wwwroot" // هنا تحددي WebRoot قبل إنشاء الـApp
+        });
 
         // 💡 إضافة الخطوة الوقائية لتعطيل تحويل المطالبات
         // تمنع إعادة تسمية مطالبات 'sub' إلى 'nameidentifier' في ClaimsPrincipal
         JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+        builder.Services.AddHttpContextAccessor();
 
         // 💡 إضافة خدمات التحكم في الوصول عبر الأصول (CORS)
         // 💡 إضافة خدمات الهوية
@@ -63,6 +68,8 @@ internal class Program
             app.UseSwaggerUI();
         }
 
+        app.UseStaticFiles();
+
         // 🛡️ فرض HTTPS (أفضل ممارسة)
         app.UseHttpsRedirection();
 
@@ -88,7 +95,6 @@ internal class Program
         // 💡 إضافة Middleware لتغليف الاستجابات الناجحة
         app.UseMiddleware<SuccessResponseMiddleware>();
 
-        app.UseStaticFiles();
 
 
         
