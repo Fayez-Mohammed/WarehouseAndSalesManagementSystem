@@ -31,12 +31,14 @@ namespace Base.API.Controllers
         private readonly IUnitOfWork _unitOfWork;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IEmailSender _emailSender;
+        private readonly IUploadImageService _uploadImageService;
 
-        public ClinicManagementController(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager, IEmailSender emailSender)
+        public ClinicManagementController(IUnitOfWork unitOfWork, UserManager<ApplicationUser> userManager, IEmailSender emailSender, IUploadImageService uploadImageService)
         {
             _unitOfWork = unitOfWork;
             _userManager = userManager;
             _emailSender = emailSender;
+            _uploadImageService = uploadImageService;
         }
 
         [HttpPost("create-clinic-user")]
@@ -488,24 +490,31 @@ namespace Base.API.Controllers
             var Repo = _unitOfWork.Repository<Clinic>();
             var spec = new BaseSpecification<Clinic>(e => e.Id == ClincId);
             spec.AllIncludes.Add(q => q.Include(c => c.MedicalSpecialty));
-            var result = (await Repo.ListAsync(spec)).Select(e => new
-            {
-                e.Id,
-                e.Name,
-                e.Email,
-                e.AddressCountry,
-                e.AddressGovernRate,
-                e.AddressCity,
-                e.AddressLocation,
-                e.Phone,
-                e.Status,
-                e.Price,
-                MedicalSpecialty = new
-                {
-                    e.MedicalSpecialty?.Id,
-                    e.MedicalSpecialty?.Name
-                }
-            });
+            var clinics = await Repo.ListAsync(spec);
+
+            var result = await Task.WhenAll(
+                                          clinics.Select(async e => new
+                                          {
+                                              e.Id,
+                                              e.Name,
+                                              e.Email,
+                                              e.AddressCountry,
+                                              e.AddressGovernRate,
+                                              e.AddressCity,
+                                              e.AddressLocation,
+                                              e.Phone,
+                                              e.Status,
+                                              e.Price,
+                                              LogoUrl = string.IsNullOrEmpty(e.LogoPath)
+                                                   ? null
+                                                   : await _uploadImageService.GetImageAsync(e.LogoPath),
+
+                                              MedicalSpecialty = new
+                                              {
+                                                  e.MedicalSpecialty?.Id,
+                                                  e.MedicalSpecialty?.Name
+                                              }
+                                          }));
             if (result is null)
             {
                 throw new NotFoundException("No Clinic are currently defined in the system.");
@@ -513,6 +522,39 @@ namespace Base.API.Controllers
             return Ok(new { message = "Clinic Data", result });
         }
 
+        [HttpPost("clinic-setlogo")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> SetClinicLogo([FromForm] ClinicLogoDTO model)
+        {
+            #region current user ClincId
+
+            var currentuser = await _userManager.GetUserAsync(User);
+            if (currentuser is null) throw new NotFoundException("Not Found user");
+
+            var userspec = new BaseSpecification<ClincAdminProfile>(c => c.UserId == currentuser.Id);
+            var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
+            var ClincId = (await userrepository.GetEntityWithSpecAsync(userspec)).ClincId;
+            if (string.IsNullOrEmpty(ClincId))
+            {
+                throw new NotFoundException("Not Available Clinc for Current User");
+            }
+            #endregion
+
+            var Repo = _unitOfWork.Repository<Clinic>();
+            var spec = new BaseSpecification<Clinic>(e => e.Id == ClincId);
+            var result = await Repo.GetEntityWithSpecAsync(spec);
+            if (result is null)
+            {
+                throw new NotFoundException("No Clinic are currently defined in the system.");
+            }
+            result.LogoPath = await _uploadImageService.UploadImageAsync(model.Logo);
+            await Repo.UpdateAsync(result);
+            if (await _unitOfWork.CompleteAsync() <= 0)
+            {
+                throw new InternalServerException("An unexpected error occurred during Upload Clinic Logo. Please try again.");
+            }
+            return Ok(new { message = "Logo Uploaded Successfully" });
+        }
 
         #region Helper
         private static string ResetPasswordClinicUserTemplate(string NewPassword)
@@ -706,6 +748,11 @@ namespace Base.API.Controllers
         public required string UserId { get; set; }
         [Required]
         public required string NewPassword { get; set; }
+    }
+    public class ClinicLogoDTO
+    {
+        [Required]
+        public IFormFile Logo { get; set; }
     }
     enum AvailableUserTypesForCreateUsers
     {

@@ -89,6 +89,7 @@ namespace Base.API.Services
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IAuthorizationHandler, ActiveUserHandler>();
             services.AddScoped<IClinicServices, ClinicServices>();
+            services.AddScoped<IUploadImageService, UploadImageService>();
 
             // 💡 إضافة Caching للتحكم في استجابات المتصفحات (وقائي)
             services.AddResponseCaching();

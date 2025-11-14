@@ -223,98 +223,6 @@ namespace Base.Services.Implementations
             }
         }
 
-
-        /// <summary>Registers the asynchronous.</summary>
-        /// <param name="model">The model.</param>
-        /// <exception cref="System.ArgumentNullException">model</exception>
-        /// <exception cref="RepositoryProject.Services.BadRequestException">This email is already registered.
-        /// or</exception>
-        /*public async Task RegisterAsync(RegisterDTO model)
-        {
-            if (model is null) throw new ArgumentNullException(nameof(model));
-
-            var existingUser = await _userManager.FindByEmailAsync(model.Email);
-            if (existingUser != null)
-                throw new BadRequestException("This email is already registered.");
-
-            await using var transaction = await _unitOfWork.BeginTransactionAsync();
-            try
-            {
-                ApplicationUser user;
-                try
-                {
-                    user = model.ToUser();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to Maping RegisterDTO for {Email}", model.Email);
-                    throw new BadRequestException($"Failed to Maping RegisterDTO");
-                }
-
-                var createUserResult = await _userManager.CreateAsync(user, model.Password);
-                if (!createUserResult.Succeeded)
-                {
-                    await transaction.RollbackAsync();
-                    throw new BadRequestException(createUserResult.Errors.Select(e => e.Description));
-                }
-
-                if (!await _roleManager.RoleExistsAsync(DefaultRole))
-                {
-                    var createRoleResult = await _roleManager.CreateAsync(new IdentityRole(DefaultRole));
-                    if (!createRoleResult.Succeeded)
-                    {
-                        await transaction.RollbackAsync();
-                        throw new BadRequestException(createRoleResult.Errors.Select(e => e.Description));
-                    }
-                }
-
-                var roleResult = await _userManager.AddToRoleAsync(user, DefaultRole);
-                if (!roleResult.Succeeded)
-                {
-                    await transaction.RollbackAsync();
-                    throw new BadRequestException(roleResult.Errors.Select(e => e.Description));
-                }
-
-
-                var profileRepository = _unitOfWork.Repository<UserProfile>();
-                var profile = model.ToProfile();
-                profile.UserId = user.Id;
-                var profileResult = await profileRepository.AddAsync(profile);
-
-                if (await _unitOfWork.CompleteAsync() > 0)
-                    await transaction.CommitAsync();
-
-                // best-effort OTP send; do not fail registration if email send fails
-                try
-                {
-                    if (user is not null && user.Email is not null)
-                        await SendOtpAsync(user.Email);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to send OTP after registration for {Email}", user.Email);
-                    throw new BadRequestException($"Failed to send OTP after registration");
-
-                }
-            }
-            catch (Exception ex)
-            {
-                try
-                {
-                    await transaction.RollbackAsync();
-                }
-                catch
-                {
-                    _logger.LogWarning(ex, "Failed to Commit Transaction");
-                    throw new BadRequestException("Failed to Commit Transaction");
-                }
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                throw new InternalServerException(ex.Message);
-            }
-        }*/
-
-
         /// <summary>Sends the otp asynchronous.</summary>
         /// <param name="email">The email.</param>
         /// <exception cref="RepositoryProject.Services.BadRequestException">Invalid request data.
@@ -532,8 +440,14 @@ namespace Base.Services.Implementations
             }
         }
 
-
-        #region External login
+        /// <summary>
+        /// Handel External Login
+        /// </summary>
+        /// <param name="email"></param>
+        /// <param name="fullName"></param>
+        /// <returns></returns>
+        /// <exception cref="BadRequestException"></exception>
+        /// <exception cref="InternalServerException"></exception>
         public async Task<ExternalLoginResponseDTO> HandleExternalLoginAsync(string email, string fullName)
         {
             if (email is null) throw new BadRequestException("Not Valid Email.");
@@ -649,7 +563,6 @@ namespace Base.Services.Implementations
                 throw new InternalServerException("An unexpected internal error occurred during HandleExternalLogin.");
             }
         }
-        #endregion
 
 
         #region Registertion refactor
@@ -669,8 +582,7 @@ namespace Base.Services.Implementations
             try
             {
                 // 3. Mapping and Identity Creation
-                var user = MapAndCreateUser(model);
-                user.UserType = DefaultUserType;
+                var user =await MapAndCreateUser(model);
 
                 // 4. Identity Creation - الآن نستخدم await بشكل صحيح
                 var createUserResult = await _userManager.CreateAsync(user, model.Password);
@@ -724,16 +636,17 @@ namespace Base.Services.Implementations
                 throw new InternalServerException("An unexpected error occurred during registration. Please try again.");
             }
         }
-        #region 🧑‍💻 الدوال المساعدة المُحسَّنة (Helper Methods)هذه الدوال تقوم بعزل منطق محدد(SRP) وتجعل الدالة `RegisterAsync` أبسط وأسهل للقراءة.```csharp
+        #region 
         /// <summary>
         /// Maps the DTO to ApplicationUser and creates the user in Identity system.
         /// </summary>
-        private ApplicationUser MapAndCreateUser(RegisterDTO model)
+        private async Task<ApplicationUser> MapAndCreateUser(RegisterDTO model)
         {
             try
             {
                 // Mapping logic separated for cleanliness
                 var user = model.ToUser();
+                user.UserType = DefaultUserType;
                 return user;
 
             }
@@ -742,15 +655,6 @@ namespace Base.Services.Implementations
                 _logger.LogWarning(ex, "Failed to map RegisterDTO for {Email}", model.Email);
                 throw new BadRequestException("Registration data format is invalid.");
             }
-
-            //var createUserResult = _userManager.CreateAsync(user, model.Password).Result; // Using .Result for simplicity, but better if the caller handles async
-            //if (createUserResult is null) throw new InternalServerException("An unexpected error occurred during registration. Please try again.");
-            //if (!createUserResult.Succeeded)
-            //{
-            //    throw new BadRequestException(createUserResult.Errors.Select(e => e.Description));
-            //}
-
-            //return user;
         }
 
         /// <summary>

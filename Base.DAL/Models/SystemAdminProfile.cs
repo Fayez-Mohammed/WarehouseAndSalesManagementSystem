@@ -65,6 +65,7 @@ namespace Base.DAL.Models
         public string? Phone { get; set; }
         public string Status { get; set; }
         public double Price { get; set; }
+        public string? LogoPath { get; set; }
 
         //public ICollection<ClincProfile> ClincAdmin { get; set; } = new HashSet<ClincProfile>();
 

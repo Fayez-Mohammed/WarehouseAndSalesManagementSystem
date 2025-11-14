@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using Microsoft.AspNetCore.Http;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
 namespace Base.Shared.DTOs
@@ -22,7 +23,6 @@ namespace Base.Shared.DTOs
 
         [Phone]
         public string? PhoneNumber { get; set; }
-
 
     }
 }

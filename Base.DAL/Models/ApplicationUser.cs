@@ -12,6 +12,7 @@ namespace Base.DAL.Models
         public string FullName { get; set; }
         public string UserType { get; set; }
         public bool IsActive { get; set; } = true;
+        public string? ImagePath { get; set; }
 
         public virtual UserProfile? Profile { get; set; }
         public virtual SystemAdminProfile? SystemAdminProfile { get; set; }
