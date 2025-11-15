@@ -189,34 +189,83 @@ namespace Base.API.Services
                     policy.Requirements.Add(new ActiveUserRequirement()));
             });
 
-            services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme,
-            options =>
-                    {options.Events = new JwtBearerEvents
+            //services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme,
+            //options =>
+            //        {options.Events = new JwtBearerEvents
+            //            {
+            //                OnChallenge = context =>
+            //                {
+            //                    // منع الـ Default 403 Response
+            //                    context.HandleResponse();
+            //                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            //                    context.Response.ContentType = "application/json";
+            //                    var result = JsonSerializer.Serialize(new
+            //                    {
+            //                        error = "Unauthorized or inactive account"
+            //                    });
+            //                    return context.Response.WriteAsync(result);
+            //                },
+            //                OnForbidden = context =>
+            //                {
+            //                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            //                    context.Response.ContentType = "application/json";
+            //                    var result = JsonSerializer.Serialize(new
+            //                    {
+            //                        error = "User account is inactive"
+            //                    });
+            //                    return context.Response.WriteAsync(result);
+            //                }
+            //            };
+            //        });
+            services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+            {
+                options.Events = new JwtBearerEvents
+                {
+                    OnChallenge = async context =>
+                    {
+                        context.HandleResponse();
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        context.Response.ContentType = "application/json";
+
+                        var result = JsonSerializer.Serialize(new
                         {
-                            OnChallenge = context =>
-                            {
-                                // منع الـ Default 403 Response
-                                context.HandleResponse();
-                                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                                context.Response.ContentType = "application/json";
-                                var result = JsonSerializer.Serialize(new
-                                {
-                                    error = "Unauthorized or inactive account"
-                                });
-                                return context.Response.WriteAsync(result);
-                            },
-                            OnForbidden = context =>
-                            {
-                                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                                context.Response.ContentType = "application/json";
-                                var result = JsonSerializer.Serialize(new
-                                {
-                                    error = "User account is inactive"
-                                });
-                                return context.Response.WriteAsync(result);
-                            }
-                        };
-                    });
+                            statusCode = 401,
+                            message = "Unauthorized – Invalid or missing token",
+                            traceId = context.HttpContext.TraceIdentifier
+                        });
+
+                        await context.Response.WriteAsync(result);
+                    },
+
+                    OnForbidden = async context =>
+                    {
+                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        context.Response.ContentType = "application/json";
+
+                        string message;
+
+                        // نفرّق بين User inactive و Role forbidden
+                        if (context.HttpContext.Items.ContainsKey("UserIsInactive"))
+                        {
+                            message = "User account is inactive";
+                        }
+                        else
+                        {
+                            message = "You do not have the required role";
+                        }
+
+                        var result = JsonSerializer.Serialize(new
+                        {
+                            statusCode = 403,
+                            message,
+                            traceId = context.HttpContext.TraceIdentifier
+                        });
+
+                        await context.Response.WriteAsync(result);
+                    }
+                };
+            });
+
             #endregion
             return services;
         }

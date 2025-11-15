@@ -10,6 +10,6 @@ namespace Base.Services.Interfaces
 {
     public interface IClinicServices
     {
-        Task<Clinic> GetClinicAsync(Expression<Func<Clinic, bool>> CriteriaExpression);
+        Task<Clinic> GetClinicAsync(Expression<Func<Clinic, bool>> CriteriaExpression, bool astracking = false);
     }
 }

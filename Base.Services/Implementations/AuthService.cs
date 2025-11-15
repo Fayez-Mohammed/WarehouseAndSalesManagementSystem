@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
+using RepositoryProject.Specifications;
 using System;
 using System.Data;
 using System.IdentityModel.Tokens.Jwt;
@@ -599,10 +600,10 @@ namespace Base.Services.Implementations
             // 1. Input Validation
             if (model is null)
                 throw new ArgumentNullException(nameof(model));
-
-            var existingUser = await _userManager.FindByEmailAsync(model.Email);
-            if (existingUser != null)
-                throw new BadRequestException("This email is already registered.");
+            var ClincRepo = _unitOfWork.Repository<Clinic>();
+            var spec = new BaseSpecification<Clinic>(c => c.Email.ToLower() == model.Email.ToLower());
+            var result = (await ClincRepo.CountAsync(spec)) > 0 || (await _userManager.FindByEmailAsync(model.Email) is not null);
+            if (result) throw new BadRequestException("This email is already registered.");
 
             // 2. Transaction Setup (using statement ensures Dispose/Rollback on failure)
             await using var transaction = await _unitOfWork.BeginTransactionAsync();

@@ -44,25 +44,27 @@ namespace Base.API.Controllers
         [HttpPost("create-clinic-user")]
         public async Task<IActionResult> CreateClinicUser([FromBody] ClincUserDTO model)
         {
-
-            if (!ModelState.IsValid)
-            {
-                var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-                throw new BadRequestException(errors);
-            }
-
-            AvailableUserTypesForCreateUsers searchTypeEnum;
-            if (!Enum.TryParse<AvailableUserTypesForCreateUsers>(model.UserType, true, out searchTypeEnum))
-                throw new InternalServerException("Invalid user type specified.");
-
-            var existingUser = await _userManager.FindByEmailAsync(model.Email);
-            if (existingUser != null)
-                throw new BadRequestException("This email is already registered.");
-
             // 2. Transaction Setup (using statement ensures Dispose/Rollback on failure)
             await using var transaction = await _unitOfWork.BeginTransactionAsync();
+
             try
             {
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+                    throw new BadRequestException(errors);
+                }
+
+                AvailableUserTypesForCreateUsers searchTypeEnum;
+                if (!Enum.TryParse<AvailableUserTypesForCreateUsers>(model.UserType, true, out searchTypeEnum))
+                    throw new InternalServerException("Invalid user type specified.");
+
+                var checkEmailExsitClincRepo = _unitOfWork.Repository<Clinic>();
+                var checkEmailExsitspec = new BaseSpecification<Clinic>(c => c.Email.ToLower() == model.Email.ToLower());
+                var checkEmailExsits = (await checkEmailExsitClincRepo.CountAsync(checkEmailExsitspec)) > 0 || (await _userManager.FindByEmailAsync(model.Email) is not null);
+                if (checkEmailExsits) throw new BadRequestException("This email is already registered.");
+
+
                 // 3. Mapping and Identity Creation
                 ApplicationUser user;
                 try
@@ -130,10 +132,13 @@ namespace Base.API.Controllers
                     throw new InternalServerException("Database transaction failed to save changes.");
                 }
             }
-            catch (Exception ex) when (ex is not BadRequestException)
+            catch (Exception ex) 
             {
                 await transaction.RollbackAsync();
-                throw new InternalServerException("An unexpected error occurred during registration. Please try again.");
+                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
+                    throw;
+                // Log the exception
+                throw new InternalServerException("An unexpected error occurred during create user. Please try again.");
             }
         }
 

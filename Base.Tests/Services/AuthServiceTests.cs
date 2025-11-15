@@ -579,7 +579,7 @@ namespace Base.Tests.Services
         public async Task ResetPassword_ShouldSucceed_WhenOtpValid()
         {
             var user = new ApplicationUser { Id = "30", Email = "reset@example.com" };
-            var dto = new ResetPasswordDTO { Email = user.Email, Otp = "123456", NewPassword = "NewPass123!" };
+            var dto = new ResetPasswordDTO { Email = user.Email, Token = "123456", NewPassword = "NewPass123!" };
 
             // OTP Validation Setup
             _otpServiceMock.Setup(x => x.ValidateOtpAsync(dto.Email, dto.Otp)).ReturnsAsync((true, user.Id));
@@ -602,7 +602,7 @@ namespace Base.Tests.Services
         public async Task ResetPassword_ShouldFail_WhenResetFails()
         {
             var user = new ApplicationUser { Id = "31", Email = "reset2@example.com" };
-            var dto = new ResetPasswordDTO { Email = user.Email, Otp = "123456", NewPassword = "NewPass123!" };
+            var dto = new ResetPasswordDTO { Email = user.Email, Token = "123456", NewPassword = "NewPass123!" };
 
             _otpServiceMock.Setup(x => x.ValidateOtpAsync(dto.Email, dto.Otp)).ReturnsAsync((true, user.Id));
             _userManagerMock.Setup(x => x.FindByIdAsync(user.Id)).ReturnsAsync(user);

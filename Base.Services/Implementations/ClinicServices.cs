@@ -22,12 +22,12 @@ namespace Base.Services.Implementations
             _unitOfWork = unitOfWork;
         }
 
-        public  async Task<Clinic> GetClinicAsync(Expression<Func<Clinic, bool>> CriteriaExpression)
+        public  async Task<Clinic> GetClinicAsync(Expression<Func<Clinic, bool>> CriteriaExpression, bool asnotracking = false)
         {
             var ClinicRepo = _unitOfWork.Repository<Clinic>();
             var spec = new BaseSpecification<Clinic>(CriteriaExpression);
             spec.AllIncludes.Add(c => c.Include(_c => _c.MedicalSpecialty));
-            var clinic = await ClinicRepo.GetEntityWithSpecAsync(spec);
+            var clinic = await ClinicRepo.GetEntityWithSpecAsync(spec, asnotracking);
             return clinic;
         }
     }

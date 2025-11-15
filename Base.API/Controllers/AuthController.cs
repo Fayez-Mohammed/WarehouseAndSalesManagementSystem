@@ -282,7 +282,7 @@ namespace Base.API.Controllers
 
                 var result = await _authService.VerifyForgetPassword(model);
                 if (string.IsNullOrEmpty(result)) throw new UnauthorizedException("Invalid or expired OTP code.");
-                return Ok(new { Message = "Your Token.", result });
+                return Ok(new { Message = "Your Token.", Token=result });
             }
             catch (Exception ex)
             {

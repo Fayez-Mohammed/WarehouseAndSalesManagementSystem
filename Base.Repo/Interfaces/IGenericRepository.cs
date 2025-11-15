@@ -19,17 +19,14 @@ namespace Base.Repo.Interfaces
         Task DeleteAsync(T entity);
 
         // -------------------- عمليات القراءة -----------------------
-        Task<T> GetByIdAsync(string id);
-        // 🟢 وقائي: List للإشارة إلى مجموعة (Read-only)
-        Task<IReadOnlyList<T>> ListAllAsync();
+        Task<T> GetByIdAsync(string id, bool asNoTracking = false);
+        Task<IReadOnlyList<T>> ListAllAsync(bool asNoTracking = false);
 
-        // ------------------- عمليات المواصفات (Spec) ------------------
-        // 🟢 وقائي: List للإشارة إلى مجموعة مع شرط
-        Task<IReadOnlyList<T>> ListAsync(ISpecification<T> spec);
-
-        Task<T> GetEntityWithSpecAsync(ISpecification<T> spec);
+        // ------------------- عمليات المواصفات ------------------
+        Task<IReadOnlyList<T>> ListAsync(ISpecification<T> spec, bool asNoTracking = false);
+        Task<T> GetEntityWithSpecAsync(ISpecification<T> spec, bool asNoTracking = false);
 
         // 🟢 وقائي: CountAsync للتأكد من أنها غير متزامنة
-        Task<int> CountAsync(ISpecification<T> spec);
+        Task<int> CountAsync(ISpecification<T> spec, bool asNoTracking = true);
     }
 }

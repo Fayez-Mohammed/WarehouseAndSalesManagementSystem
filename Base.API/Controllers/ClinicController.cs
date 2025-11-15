@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using RepositoryProject.Specifications;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
@@ -36,12 +37,14 @@ namespace Base.API.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IEmailSender _emailSender;
+        private readonly IUploadImageService _uploadImageService;
 
-        public ClinicController(UserManager<ApplicationUser> userManager, IUnitOfWork unitOfWork, IEmailSender emailSender)
+        public ClinicController(UserManager<ApplicationUser> userManager, IUnitOfWork unitOfWork, IEmailSender emailSender, IUploadImageService uploadImageService)
         {
             _userManager = userManager;
             _unitOfWork = unitOfWork;
             _emailSender = emailSender;
+            _uploadImageService = uploadImageService;
         }
 
         /// <summary>
@@ -62,16 +65,25 @@ namespace Base.API.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> CreateClinic([FromBody] ClincRegistrationDTO model)
         {
-            if (!ModelState.IsValid)
+            try
             {
-                var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-                throw new BadRequestException(errors);
-            }
-            var ClincRepo = _unitOfWork.Repository<Clinic>();
-            var spec = new BaseSpecification<Clinic>(c => c.Email.ToLower() == model.Email.ToLower());
-            var result = await ClincRepo.CountAsync(spec);
-            if (result < 1)
-            {
+
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+                    throw new BadRequestException(errors);
+                }
+
+                var MedicalSpecialtyRepo = _unitOfWork.Repository<MedicalSpecialty>();
+                var MedicalSpecialtyspec = new BaseSpecification<MedicalSpecialty>(c => c.Id == model.MedicalSpecialtyId);
+                var count = await MedicalSpecialtyRepo.CountAsync(MedicalSpecialtyspec);
+                if (count == 0) throw new BadRequestException("This Medical Specialty is not exist");
+
+                var ClincRepo = _unitOfWork.Repository<Clinic>();
+                var spec = new BaseSpecification<Clinic>(c => c.Email.ToLower() == model.Email.ToLower());
+                var result = (await ClincRepo.CountAsync(spec)) > 0 || (await _userManager.FindByEmailAsync(model.Email) is not null);
+                if (result) throw new BadRequestException("A clinic with this email already exists.");
+
                 var _Clinc = model.ToClinc();
                 await ClincRepo.AddAsync(_Clinc);
                 if (await _unitOfWork.CompleteAsync() > 0)
@@ -79,8 +91,16 @@ namespace Base.API.Controllers
                     {
                         message = "We have received your request, and it is currently under review. An email will be sent after the review."
                     });
+
+                throw new BadRequestException("Failed to create Clinic Request");
             }
-            throw new BadRequestException("An error occurred, please try again later.");
+            catch (Exception ex)
+            {
+                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
+                    throw;
+                // Log the exception
+                throw new InternalServerException("An unexpected internal error occurred during create clinic request.");
+            }
         }
 
         /// <summary>
@@ -269,13 +289,21 @@ namespace Base.API.Controllers
         [HttpPatch("activate-Clinic")]
         public async Task<IActionResult> ActivateClinic(string ClinicId)
         {
-            if (string.IsNullOrEmpty(ClinicId)) throw new BadRequestException("ClinicId is Required");
-            var result = await ChangeClinicStatusAsync(c => c.Id == ClinicId, ClinicStatus.active);
-            if (result)
+            try
             {
-                throw new NotFoundException("Faild To Activate Clinic");
+                if (string.IsNullOrEmpty(ClinicId)) throw new BadRequestException("ClinicId is Required");
+                var result = await ChangeClinicStatusAsync(c => c.Id == ClinicId, ClinicStatus.active);
+                if (!result) throw new NotFoundException("Faild To Activate Clinic");
+                
+                return Ok(new { message = "Clinic Activated" });
             }
-            return Ok(new { message = "Clinic Activated" });
+            catch (Exception ex)
+            {
+                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
+                    throw;
+                // Log the exception
+                throw new InternalServerException("An unexpected error occurred during Activate Clinic. Please try again.");
+            }
         }
 
         /// <summary>
@@ -290,13 +318,22 @@ namespace Base.API.Controllers
         [HttpPatch("deactivate-clinic")]
         public async Task<IActionResult> DeactivateClinic(string ClinicId)
         {
-            if (string.IsNullOrEmpty(ClinicId)) throw new BadRequestException("ClinicId is Required");
-            var result = await ChangeClinicStatusAsync(c => c.Id == ClinicId, ClinicStatus.notactive);
-            if (result)
+            try
             {
-                throw new NotFoundException("Faild To Deactivate Clinic");
+                if (string.IsNullOrEmpty(ClinicId)) throw new BadRequestException("ClinicId is Required");
+                var result = await ChangeClinicStatusAsync(c => c.Id == ClinicId, ClinicStatus.notactive);
+                if (!result) throw new NotFoundException("Faild To Deactivate Clinic");
+                
+                return Ok(new { message = "Clinic Deactivated" });
             }
-            return Ok(new { message = "Clinic Deactivated" });
+            catch (Exception ex)
+            {
+
+                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
+                    throw;
+                // Log the exception
+                throw new InternalServerException("An unexpected error occurred during Deactivate Clinic. Please try again.");
+            }
         }
 
         /// <summary>
@@ -397,49 +434,61 @@ namespace Base.API.Controllers
         [HttpPost("create-clinicadmin")]
         public async Task<IActionResult> CreateClinicAdmin([FromBody] ClincAdminProfileCreateDTO model)
         {
-            if (!ModelState.IsValid)
-            {
-                var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-                throw new BadRequestException(errors);
-            }
-            var ClincadminUser = await _userManager.FindByEmailAsync(model.Email);
-            if (ClincadminUser is not null) throw new BadRequestException("This email is exsits");
-
-
-            ClincadminUser = new ApplicationUser
-            {
-                FullName = model.FullName,
-                UserType = "ClincAdmin",
-                UserName = model.Email,
-                Email = model.Email,
-                EmailConfirmed = true,
-                ClincAdminProfile = new ClincAdminProfile()
-                {
-                    ClincId = model.ClincId,
-                }
-            };
-
-            var password = GeneratePassword();
-            var result = await _userManager.CreateAsync(ClincadminUser, password);
-            if (!result.Succeeded)
-            {
-                throw new BadRequestException("Faild to Create User");
-            }
-            await _userManager.AddToRoleAsync(ClincadminUser, "ClincAdmin");
             try
             {
-                var clincrepo = _unitOfWork.Repository<Clinic>();
-                var spec = new BaseSpecification<Clinic>(c => c.Id == model.ClincId);
-                var clinic = await clincrepo.GetEntityWithSpecAsync(spec);
-                await _emailSender.SendEmailAsync(model.Email, "your clinic admin account",
-                    GetClinicAdminAccountCreatedTemplate(model.FullName, clinic.Name, model.Email, password, "", "", "", "", DateTime.Now.Year));
+
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+                    throw new BadRequestException(errors);
+                }
+                var checkEmailExsitClincRepo = _unitOfWork.Repository<Clinic>();
+                var checkEmailExsitspec = new BaseSpecification<Clinic>(c => c.Email.ToLower() == model.Email.ToLower());
+                var checkEmailExsits = (await checkEmailExsitClincRepo.CountAsync(checkEmailExsitspec)) > 0 || (await _userManager.FindByEmailAsync(model.Email) is not null);
+                if (checkEmailExsits) throw new BadRequestException("This email is already registered.");
+
+                var ClincadminUser = new ApplicationUser
+                {
+                    FullName = model.FullName,
+                    UserType = "ClincAdmin",
+                    UserName = model.Email,
+                    Email = model.Email,
+                    EmailConfirmed = true,
+                    ClincAdminProfile = new ClincAdminProfile()
+                    {
+                        ClincId = model.ClincId,
+                    }
+                };
+
+                var password = GeneratePassword();
+                var result = await _userManager.CreateAsync(ClincadminUser, password);
+                if (!result.Succeeded)
+                {
+                    throw new BadRequestException("Faild to Create User");
+                }
+                await _userManager.AddToRoleAsync(ClincadminUser, "ClincAdmin");
+                try
+                {
+                    var clincrepo = _unitOfWork.Repository<Clinic>();
+                    var spec = new BaseSpecification<Clinic>(c => c.Id == model.ClincId);
+                    var clinic = await clincrepo.GetEntityWithSpecAsync(spec);
+                    await _emailSender.SendEmailAsync(model.Email, "your clinic admin account",
+                        GetClinicAdminAccountCreatedTemplate(model.FullName, clinic.Name, model.Email, password, "", "", "", "", DateTime.Now.Year));
+                }
+                catch (Exception ex)
+                {
+                    throw new BadRequestException("User Created Successfully but Failed to send mail");
+                }
+                return Ok(new { message = $"'{model.FullName}' is Now Admin for ClinicId '{model.ClincId}'" });
+
             }
             catch (Exception ex)
             {
-                throw new BadRequestException("User Created Successfully but Failed to send mail");
+                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
+                    throw;
+                // Log the exception
+                throw new InternalServerException("An unexpected internal error occurred during create clinic Admin.");
             }
-            return Ok(new { message = $"'{model.FullName}' is Now Admin for ClinicId '{model.ClincId}'" });
-
 
         }
 
@@ -548,20 +597,52 @@ namespace Base.API.Controllers
             var totalItems = await ClinicRepo.CountAsync(spec);
             spec.AllIncludes.Add(c => c.Include(_c => _c.MedicalSpecialty));
             var list = await ClinicRepo.ListAsync(spec);
-            var result = list.ToClincDTOSet();
+            var result = await Task.WhenAll(
+                                          list.Select(async e => new ClincDTO
+                                          {
+                                              Id = e.Id,
+                                              Name = e.Name,
+                                              Email = e.Email,
+                                              AddressCountry = e.AddressCountry,
+                                              AddressGovernRate = e.AddressGovernRate,
+                                              AddressCity = e.AddressCity,
+                                              AddressLocation = e.AddressLocation,
+                                              Phone = e.Phone,
+                                              Status = e.Status,
+                                              price = e.Price,
+                                              LogoUrl = string.IsNullOrEmpty(e.LogoPath)
+                                                   ? null
+                                                   : await _uploadImageService.GetImageAsync(e.LogoPath),
+                                              MedicalSpecialtyId = e.MedicalSpecialty?.Id,
+                                              MedicalSpecialtyName = e.MedicalSpecialty?.Name
+                                          }));
             var pagination = new Pagination<ClincDTO>(pageIndex, pageSize, totalItems, result);
             return pagination;
         }
-        
+
 
         private async Task<bool> ChangeClinicStatusAsync(Expression<Func<Clinic, bool>> CriteriaExpression, ClinicStatus status)
         {
-            var ClincRepo = _unitOfWork.Repository<Clinic>();
-            var spec = new BaseSpecification<Clinic>(CriteriaExpression);
-            var Clinc = await ClincRepo.GetEntityWithSpecAsync(spec);
-            Clinc.Status = status.ToString();
-            await ClincRepo.UpdateAsync(Clinc);
-            return (await _unitOfWork.CompleteAsync() > 0);
+
+            try
+            {
+                var ClincRepo = _unitOfWork.Repository<Clinic>();
+                var spec = new BaseSpecification<Clinic>(CriteriaExpression);
+                var Clinc = await ClincRepo.GetEntityWithSpecAsync(spec);
+                if (Clinc is null) throw new NotFoundException("this clinic not exsited");
+                Clinc.Status = status.ToString();
+                await ClincRepo.UpdateAsync(Clinc);
+                if (await _unitOfWork.CompleteAsync() > 0) return true;
+
+                throw new BadRequestException("faild to save clinic status");
+            }
+            catch (Exception ex)
+            {
+                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
+                    throw;
+                // Log the exception
+                throw new InternalServerException("An unexpected error occurred during Change Clinic Status. Please try again.");
+            }
         }
 
 
@@ -716,6 +797,8 @@ namespace Base.API.Controllers
         public string? AddressLocation { get; set; }
         public string? Phone { get; set; }
         public string Status { get; set; } = ClinicStatus.pending.ToString();
+        public double? price { get; set; }
+        public string? LogoUrl { get; set; }
     }
     public static class ClincExtensions
     {
@@ -758,7 +841,8 @@ namespace Base.API.Controllers
                 AddressCity = entity.AddressCity,
                 AddressLocation = entity.AddressLocation,
                 Phone = entity.Phone,
-                Status = entity.Status,
+                Status = entity.Status
+
             };
         }
         public static HashSet<ClincDTO> ToClincDTOSet(this IEnumerable<Clinic> entities)

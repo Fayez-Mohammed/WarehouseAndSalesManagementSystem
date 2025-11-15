@@ -18,8 +18,69 @@ namespace Base.API.Authorization
             _userManager = userManager;
             _clinicServices = clinicServices;
         }
-
         protected override async Task HandleRequirementAsync(
+    AuthorizationHandlerContext context,
+    ActiveUserRequirement requirement)
+        {
+            var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
+            {
+                context.Fail();
+                return;
+            }
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                context.Fail();
+                return;
+            }
+
+            // 1️⃣ لو اليوزر غير نشط
+            if (!user.IsActive)
+            {
+                // نضع علامة في HttpContext
+                var httpContext = context.Resource as DefaultHttpContext;
+                httpContext?.Items.Add("UserIsInactive", true);
+
+                context.Fail();
+                return;
+            }
+
+            // 2️⃣ تحقق من نوع المستخدم و الـ Clinic
+            if (Enum.TryParse<AvailableUserTypesForCreateUsers>(user.UserType, true, out var searchTypeEnum))
+            {
+                var clinicId = searchTypeEnum switch
+                {
+                    AvailableUserTypesForCreateUsers.ClinicDoctor => user.ClincDoctorProfile?.ClincId,
+                    AvailableUserTypesForCreateUsers.ClinicReceptionist => user.ClincReceptionistProfile?.ClincId,
+                    AvailableUserTypesForCreateUsers.ClinicAdmin => user.ClincAdminProfile?.ClincId,
+                    _ => null
+                };
+
+                if (string.IsNullOrEmpty(clinicId))
+                {
+                    context.Fail();
+                    return;
+                }
+
+                var clinic = await _clinicServices.GetClinicAsync(c => c.Id == clinicId && c.Status == ClinicStatus.active.ToString(),true);
+                if (clinic == null)
+                {
+                    // نضع علامة في HttpContext على سبب عدم النشاط
+                    var httpContext = context.Resource as DefaultHttpContext;
+                    httpContext?.Items.Add("UserIsInactive", true);
+
+                    context.Fail();
+                    return;
+                }
+            }
+
+            // لو كل شيء تمام
+            context.Succeed(requirement);
+        }
+
+        /*protected override async Task HandleRequirementAsync(
             AuthorizationHandlerContext context,
             ActiveUserRequirement requirement)
         {
@@ -60,7 +121,7 @@ namespace Base.API.Authorization
             }
 
             context.Succeed(requirement);
-        }
+        }*/
     }
 }
 

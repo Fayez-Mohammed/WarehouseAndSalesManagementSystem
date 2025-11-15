@@ -1,4 +1,161 @@
-﻿using Base.API.DTOs;
+﻿
+using System.Text.Json;
+
+namespace Base.API.MiddleWare
+{
+    public class SuccessResponseMiddleware
+    {
+        private readonly RequestDelegate _next;
+        private readonly ILogger<SuccessResponseMiddleware> _logger;
+
+        public SuccessResponseMiddleware(RequestDelegate next, ILogger<SuccessResponseMiddleware> logger)
+        {
+            _next = next;
+            _logger = logger;
+        }
+
+        public async Task InvokeAsync(HttpContext context)
+        {
+            if (context.Request.Path.StartsWithSegments("/hangfire"))
+            {
+                await _next(context);
+                return;
+            }
+
+            var originalBody = context.Response.Body;
+            await using var tempBody = new MemoryStream();
+            context.Response.Body = tempBody;
+
+            try
+            {
+                await _next(context);
+            }
+            catch
+            {
+                context.Response.Body = originalBody;
+                throw;
+            }
+
+            tempBody.Seek(0, SeekOrigin.Begin);
+            var bodyText = await new StreamReader(tempBody).ReadToEndAsync();
+
+            if (context.Response.StatusCode >= 200 && context.Response.StatusCode < 300)
+            {
+                string traceId = context.TraceIdentifier ?? Guid.NewGuid().ToString();
+                int statusCode = context.Response.StatusCode;
+                string message = "Success";
+
+                var finalDict = new Dictionary<string, object?>
+                {
+                    ["statusCode"] = statusCode,
+                    ["message"] = message,
+                    ["traceId"] = traceId
+                };
+
+                if (!string.IsNullOrWhiteSpace(bodyText))
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(bodyText);
+                        var root = doc.RootElement;
+
+                        if (root.ValueKind == JsonValueKind.Object)
+                        {
+                            var dict = new Dictionary<string, object?>();
+
+                            foreach (var prop in root.EnumerateObject())
+                            {
+                                var name = prop.Name.ToLower();
+
+                                if (name == "statuscode")
+                                {
+                                    statusCode = prop.Value.GetInt32();
+                                    finalDict["statusCode"] = statusCode;
+                                }
+                                else if (name == "message")
+                                {
+                                    message = prop.Value.GetString() ?? message;
+                                    finalDict["message"] = message;
+                                }
+                                else
+                                {
+                                    dict[prop.Name] = JsonSerializer.Deserialize<object>(prop.Value.GetRawText());
+                                }
+                            }
+
+                            // flatten data/result if exists
+                            string[] flattenKeys = { "data", "result" };
+                            Dictionary<string, object?>? flat = null;
+
+                            foreach (var key in flattenKeys)
+                            {
+                                var match = dict.Keys.FirstOrDefault(x => x.Equals(key, StringComparison.OrdinalIgnoreCase));
+                                if (match != null)
+                                {
+                                    var raw = dict[match];
+
+                                    if (raw is JsonElement je && je.ValueKind == JsonValueKind.Object)
+                                    {
+                                        flat = JsonSerializer.Deserialize<Dictionary<string, object?>>(je.GetRawText());
+                                    }
+                                    else if (raw is Dictionary<string, object?> d2)
+                                    {
+                                        flat = d2;
+                                    }
+
+                                    dict.Remove(match);
+                                    break;
+                                }
+                            }
+
+                            if (flat != null)
+                            {
+                                foreach (var kv in dict)
+                                    flat[kv.Key] = kv.Value;
+
+                                foreach (var kv in flat)
+                                    finalDict[kv.Key] = kv.Value;
+                            }
+                            else
+                            {
+                                foreach (var kv in dict)
+                                    finalDict[kv.Key] = kv.Value;
+                            }
+                        }
+                        else
+                        {
+                            // primitive/array → return as value
+                            finalDict["value"] = JsonSerializer.Deserialize<object>(bodyText);
+                        }
+                    }
+                    catch
+                    {
+                        finalDict["value"] = bodyText.Trim('"');
+                    }
+                }
+
+                var output = JsonSerializer.Serialize(finalDict, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    WriteIndented = true
+                });
+
+                context.Response.Body = originalBody;
+                context.Response.ContentType = "application/json; charset=utf-8";
+                await context.Response.WriteAsync(output);
+            }
+            else
+            {
+                tempBody.Seek(0, SeekOrigin.Begin);
+                await tempBody.CopyToAsync(originalBody);
+            }
+        }
+    }
+}
+
+
+
+/*using Base.API.DTOs;
 using System.Text.Json;
 
 namespace Base.API.MiddleWare
@@ -111,23 +268,23 @@ namespace Base.API.MiddleWare
                         }
 
                         // لو response هو JSON object
-                        /*if (root.ValueKind == JsonValueKind.Object)
-                        {
-                            var dict = new Dictionary<string, object?>();
+                        //if (root.ValueKind == JsonValueKind.Object)
+                        //{
+                        //    var dict = new Dictionary<string, object?>();
 
-                            foreach (var prop in root.EnumerateObject())
-                            {
-                                // شيل statusCode و message من البيانات
-                                if (prop.NameEquals("statusCode"))
-                                    statusCode = prop.Value.GetInt32();
-                                else if (prop.NameEquals("message"))
-                                    message = prop.Value.GetString() ?? message;
-                                else
-                                    dict[prop.Name] = JsonSerializer.Deserialize<object>(prop.Value.GetRawText());
-                            }
+                        //    foreach (var prop in root.EnumerateObject())
+                        //    {
+                        //        // شيل statusCode و message من البيانات
+                        //        if (prop.NameEquals("statusCode"))
+                        //            statusCode = prop.Value.GetInt32();
+                        //        else if (prop.NameEquals("message"))
+                        //            message = prop.Value.GetString() ?? message;
+                        //        else
+                        //            dict[prop.Name] = JsonSerializer.Deserialize<object>(prop.Value.GetRawText());
+                        //    }
 
-                            data = dict;
-                        }*/
+                        //    data = dict;
+                        //}
                         else
                         {
                             // لو مش object (مثلا array) نحطه كله في data
@@ -173,7 +330,7 @@ namespace Base.API.MiddleWare
     }
 }
 
-
+*/
 
 /*using Base.API.DTOs;
 using System.Text.Json;
