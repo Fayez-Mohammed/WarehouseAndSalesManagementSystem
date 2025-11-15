@@ -261,6 +261,37 @@ namespace Base.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Verifies the forget password.
+        /// </summary>
+        /// <param name="model">The model.</param>
+        /// <returns></returns>
+        /// <exception cref="BadRequestException">errors</exception>
+        /// <exception cref="UnauthorizedException">Invalid or expired OTP code.</exception>
+        /// <exception cref="InternalServerException">An unexpected internal error occurred during Verify ForgetPassword.</exception>
+        [HttpPost("verify-forgetpassword")]
+        public async Task<IActionResult> VerifyForgetPassword([FromBody] VerifyForgetPasswordDTO model)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+                    throw new BadRequestException(errors);
+                }
+
+                var result = await _authService.VerifyForgetPassword(model);
+                if (string.IsNullOrEmpty(result)) throw new UnauthorizedException("Invalid or expired OTP code.");
+                return Ok(new { Message = "Your Token.", result });
+            }
+            catch (Exception ex)
+            {
+                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
+                    throw;
+                throw new InternalServerException("An unexpected internal error occurred during Verify ForgetPassword.");
+            }
+        }
+
 
         /// <summary>
         /// Forgots the password.

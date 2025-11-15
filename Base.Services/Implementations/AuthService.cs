@@ -293,6 +293,32 @@ namespace Base.Services.Implementations
             }
         }
 
+        public async Task<string> VerifyForgetPassword(VerifyForgetPasswordDTO model)
+        {
+            try
+            {
+                if (model is null) throw new ArgumentNullException(nameof(model));
+
+                var (isValid, userId) = await _otpService.ValidateOtpAsync(model.Email, model.Otp);
+                if (!isValid) return "Invalid OTP";
+
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null)
+                    throw new InvalidOperationException($"Security flow error: User Email '{model.Email}' associated with valid OTP was not found.");
+                
+                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+
+                try { await _otpService.RemoveOtpAsync(model.Email); } catch { /* best-effort */ }
+                return token;
+
+            }
+            catch (Exception ex)
+            {
+                try { await _otpService.RemoveOtpAsync(model.Email); } catch { /* best-effort */ }
+                return ex.Message;
+                throw;
+            }
+        }
 
         /// <summary>
         /// Resets the password.
@@ -311,23 +337,25 @@ namespace Base.Services.Implementations
 
                 if (model is null) throw new ArgumentNullException(nameof(model));
 
-                var (isValid, userId) = await _otpService.ValidateOtpAsync(model.Email, model.Otp);
+                /*var (isValid, userId) = await _otpService.ValidateOtpAsync(model.Email, model.Otp);
 
+                if (!isValid) return false;*/
+
+                var user = await _userManager.FindByEmailAsync(model.Email);
+                if (user == null)
+                    throw new BadRequestException("Invalid request");
+
+                var isValid = await _userManager.VerifyUserTokenAsync(user,_userManager.Options.Tokens.PasswordResetTokenProvider,
+                    "ResetPassword",model.Token);
                 if (!isValid) return false;
 
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
-                    throw new InvalidOperationException($"Security flow error: User Email '{model.Email}' associated with valid OTP was not found.");
-
-                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-                var result = await _userManager.ResetPasswordAsync(user, token, model.NewPassword);
+                var result = await _userManager.ResetPasswordAsync(user, model.Token, model.NewPassword);
                 if (!result.Succeeded)
                 {
                     var errors = result.Errors.Select(e => e.Description).ToList();
                     throw new BadRequestException($"Password reset failed: {string.Join(", ", errors)}");
                 }
 
-                try { await _otpService.RemoveOtpAsync(model.Email); } catch { /* best-effort */ }
                 return true;
             }
             catch (Exception)

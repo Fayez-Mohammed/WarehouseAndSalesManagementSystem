@@ -45,6 +45,12 @@ namespace Base.Services.Interfaces
         /// </summary>
         Task<bool> VerifyEmailAsync(VerifyOtpDTO model);
 
+        /// <summary>
+        /// Verifies the forget password.
+        /// </summary>
+        /// <param name="model">The model.</param>
+        /// <returns></returns>
+        public Task<string> VerifyForgetPassword(VerifyForgetPasswordDTO model);
 
         /// <summary>Resets the password.</summary>
         /// <param name="model">The model.</param>

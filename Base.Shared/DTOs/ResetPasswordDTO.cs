@@ -7,8 +7,18 @@ namespace Base.Shared.DTOs
         [Required]
         public required string Email { get; set; }
         [Required]
-        public required string Otp { get; set; }
+        public required string Token { get; set; }
         [Required]
         public required string NewPassword { get; set; }
+    }
+
+    public class VerifyForgetPasswordDTO
+    {
+        [Required]
+        public required string Email { get; set; }
+        [Required]
+        public required string Otp { get; set; }
+        //[Required]
+        //public required string NewPassword { get; set; }
     }
 }
