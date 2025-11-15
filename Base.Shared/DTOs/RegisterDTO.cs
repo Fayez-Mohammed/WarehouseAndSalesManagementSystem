@@ -21,8 +21,8 @@ namespace Base.Shared.DTOs
         //[Required]
         //public required string UserType { get; set; }
 
+        [Required]
         [Phone]
         public string? PhoneNumber { get; set; }
-
     }
 }

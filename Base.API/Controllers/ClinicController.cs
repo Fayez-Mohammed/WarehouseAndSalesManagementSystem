@@ -313,12 +313,12 @@ namespace Base.API.Controllers
         {
             var Repo = _unitOfWork.Repository<ClincAdminProfile>();
             var spec = new BaseSpecification<ClincAdminProfile>(e => e.ClincId == ClinicId);
-            var list = (await Repo.ListAsync(spec)).Select(e => new { e.User?.Id, e.User?.FullName }).ToHashSet();
-            if (!list.Any())
+            var result = (await Repo.ListAsync(spec)).Select(e => new { e.User?.Id, e.User?.FullName }).ToHashSet();
+            if (!result.Any())
             {
                 throw new NotFoundException("No Admin are currently defined in this Clinic.");
             }
-            return Ok(new { message = "All Clinic Admins", list });
+            return Ok(new { message = "All Clinic Admins", result });
         }
 
         /// <summary>

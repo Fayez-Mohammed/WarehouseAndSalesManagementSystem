@@ -12,6 +12,8 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
@@ -83,19 +85,19 @@ namespace Base.API.Controllers
                 if (!result.EmailConfirmed)
                 {
                     // نجاح جزئي: يتطلب التحقق من OTP
-                    return Ok(new ApiResponseDTO(202, null, result));
+                    return Ok(new { statusCode = 201, result });
                 }
 
                 if (result.RequiresOtpVerification)
                 {
                     // نجاح جزئي: يتطلب التحقق من OTP
-                    return Ok(new ApiResponseDTO(202, null, result));
+                    return Ok(result);
                 }
 
                 // نجاح تام (تم إرجاع التوكن مباشرة لأن 2FA غير مفعل)
                 if (!string.IsNullOrEmpty(result.Token) && result.user is not null)
                 {
-                    return Ok(new ApiResponseDTO(200, null, result));
+                    return Ok(result);
                 }
 
                 // حالة غير متوقعة (فشل توليد التوكن داخل الخدمة)
@@ -147,7 +149,7 @@ namespace Base.API.Controllers
 
                 // نجاح تام بعد التحقق من OTP
                 // بما أن result.Success = true, يجب أن يكون result.Data != null
-                return Ok(new ApiResponseDTO(200, "Token and User info", result)); // 200 OK (Data contains Token and User info)
+                return Ok(new { statusCode = 200, message = "Token and User info", result }); // 200 OK (Data contains Token and User info)
 
             }
             catch (InvalidOperationException ex)
@@ -187,7 +189,7 @@ namespace Base.API.Controllers
                 }
 
                 await _authService.RegisterAsync(model);
-                return Ok(new ApiResponseDTO(200, "The user has successfully registered. Please check your email to confirm your account."));
+                return Ok(new { statusCode = 200, message = "The user has successfully registered. Please check your email to confirm your account."});
 
             }
             catch (Exception ex)
@@ -218,7 +220,7 @@ namespace Base.API.Controllers
                     throw new BadRequestException("Email is Required.");
 
                 await _authService.SendOtpAsync(Email);
-                return Ok(new ApiResponseDTO(200, "A One-Time (OTP) has been sent to your email."));
+                return Ok(new { statusCode = 200, message = "A One-Time (OTP) has been sent to your email." });
 
 
             }
@@ -249,7 +251,7 @@ namespace Base.API.Controllers
 
                 var ok = await _authService.VerifyEmailAsync(model);
                 if (!ok) throw new UnauthorizedException("Invalid or expired OTP code.");
-                return Ok(new ApiResponseDTO(200, "Your email address has been successfully confirmed. You can now log in."));
+                return Ok(new { statusCode = 200, message = "Your email address has been successfully confirmed. You can now log in." });
             }
             catch (Exception ex)
             {
@@ -275,7 +277,7 @@ namespace Base.API.Controllers
                     throw new BadRequestException("Invalid request data.");
 
                 await _authService.SendOtpAsync(Email);
-                return Ok(new ApiResponseDTO(200, "A One-Time (OTP) has been sent to your email."));
+                return Ok(new { statusCode = 200, message = "A One-Time (OTP) has been sent to your email." });
 
             }
             catch (Exception ex)
@@ -309,7 +311,7 @@ namespace Base.API.Controllers
                 var ok = await _authService.ResetPassword(model);
                 if (!ok) throw new BadRequestException("Reset Password failed.");
 
-                return Ok(new ApiResponseDTO(200, "Password has been reset successfully."));
+                return Ok(new { statusCode = 200, message = "Password has been reset successfully." });
             }
             catch (Exception ex)
             {
@@ -348,7 +350,7 @@ namespace Base.API.Controllers
                 // 2. Delegate business logic to the service layer
                 await _authService.ChangePasswordAsync(userId, model);
                 // 3. Success response
-                return Ok(new ApiResponseDTO(200, "Password changed successfully."));
+                return Ok(new { statusCode = 200, message = "Password changed successfully." });
             }
             // 4. Handle specific business exceptions from the service
             catch (BadRequestException ex)
@@ -418,7 +420,7 @@ namespace Base.API.Controllers
                 var loginResponse = await _authService.HandleExternalLoginAsync(email, fullName);
 
                 // 3. إرجاع النتيجة (Token and User data)
-                return Ok(new ApiResponseDTO(200, "Token and User data", loginResponse));
+                return Ok(new { statusCode = 200, message = "Token and User data", loginResponse });
             }
             catch (BadRequestException ex)
             {
@@ -479,7 +481,7 @@ namespace Base.API.Controllers
                 var loginResponse = await _authService.HandleExternalLoginAsync(email, fullName);
 
                 // 3. إرجاع النتيجة (Token and User data)
-                return Ok(new ApiResponseDTO(200, "Token and User data", loginResponse));
+                return Ok(new { statusCode = 200, message = "Token and User data", loginResponse });
 
             }
             catch (Exception ex)

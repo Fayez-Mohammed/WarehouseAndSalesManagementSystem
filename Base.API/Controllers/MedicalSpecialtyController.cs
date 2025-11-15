@@ -29,7 +29,7 @@ namespace Base.API.Controllers
             var MedicalSpecialtyRepo = _unitOfWork.Repository<MedicalSpecialty>();
             var list = await MedicalSpecialtyRepo.ListAllAsync();
             var result = list.ToMedicalSpecialtyDTOSet();
-            if (!list.Any())
+            if (!result.Any())
             {
                 throw new NotFoundException("No Clinc requests are currently defined in the system.");
             }

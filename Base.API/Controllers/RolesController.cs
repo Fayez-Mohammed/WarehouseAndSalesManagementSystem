@@ -60,16 +60,16 @@ namespace Base.API.Controllers
         public IActionResult GetRoles()
         {
             // 1. التحويل إلى DTO/Projection لتجنب تسريب أي بيانات غير ضرورية من كائن IdentityRole
-            var roles = _roleManager.Roles
+            var result = _roleManager.Roles
                 .Select(r => new { r.Id, r.Name }) // اختيار حقول محددة فقط
                 .ToList();
 
             // 2. التحقق الوقائي: إرجاع 404 إذا لم يتم العثور على أدوار
-            if (!roles.Any())
+            if (!result.Any())
             {
                throw new NotFoundException("No roles are currently defined in the system.");
             }
-            return Ok(new ApiResponseDTO(200, "All Roles", roles));
+            return Ok(new ApiResponseDTO(200, "All Roles", result));
         }
 
         [HttpDelete("delete")]

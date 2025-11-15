@@ -52,9 +52,66 @@ namespace Base.API.MiddleWare
                     {
                         using var doc = JsonDocument.Parse(bodyText);
                         var root = doc.RootElement;
+                        if (root.ValueKind == JsonValueKind.Object)
+                        {
+                            var dict = new Dictionary<string, object?>();
+
+                            foreach (var prop in root.EnumerateObject())
+                            {
+                                var propName = prop.Name.ToLower();
+
+                                if (propName == "statuscode")
+                                    statusCode = prop.Value.GetInt32();
+
+                                else if (propName == "message")
+                                    message = prop.Value.GetString() ?? message;
+
+                                else
+                                    dict[prop.Name] = JsonSerializer.Deserialize<object>(prop.Value.GetRawText());
+                            }
+
+                            // keys to flatten
+                            var flattenKeys = new[] { "data", "result" };
+
+                            object? flatData = null;
+
+                            foreach (var key in flattenKeys)
+                            {
+                                var match = dict.Keys.FirstOrDefault(k =>
+                                    k.Equals(key, StringComparison.OrdinalIgnoreCase));
+
+                                if (match != null)
+                                {
+                                    var elem = dict[match];
+
+                                    // 1) لو elem JsonElement → نفكه
+                                    if (elem is JsonElement je)
+                                    {
+                                        if (je.ValueKind == JsonValueKind.Object)
+                                        {
+                                            flatData = JsonSerializer.Deserialize<Dictionary<string, object?>>(
+                                                je.GetRawText()
+                                            );
+                                        }
+                                    }
+                                    // 2) لو elem Dictionary بالفعل
+                                    else if (elem is Dictionary<string, object?> innerDict)
+                                    {
+                                        flatData = innerDict;
+                                    }
+
+                                    if (flatData != null)
+                                    {
+                                        break;
+                                    }
+                                }
+                            }
+
+                            data = flatData ?? dict;
+                        }
 
                         // لو response هو JSON object
-                        if (root.ValueKind == JsonValueKind.Object)
+                        /*if (root.ValueKind == JsonValueKind.Object)
                         {
                             var dict = new Dictionary<string, object?>();
 
@@ -70,7 +127,7 @@ namespace Base.API.MiddleWare
                             }
 
                             data = dict;
-                        }
+                        }*/
                         else
                         {
                             // لو مش object (مثلا array) نحطه كله في data

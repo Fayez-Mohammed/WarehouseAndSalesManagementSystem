@@ -149,21 +149,20 @@ namespace Base.API.Controllers
 
             var ClincRepo = _unitOfWork.Repository<ClincDoctorProfile>();
             var spec = new BaseSpecification<ClincDoctorProfile>(e => e.ClincId == targetClinicId);
-            var list = (await ClincRepo.ListAsync(spec))
+            var result = (await ClincRepo.ListAsync(spec))
                 .Select(e => new
                 {
-                    e.Id,
-                    e.UserId,
+                    Id = e.UserId,
+                    //e.UserId,
                     e.User?.FullName,
                     e.User?.Email,
                     e.User?.IsActive
                 }).ToList();
-
-            if (!list.Any())
+            if (!result.Any())
             {
                 throw new NotFoundException("No Clinic requests are currently defined in the system.");
             }
-            return Ok(new { message = "All Doctors", list });
+            return Ok(new { message = "All Doctors", result });
         }
 
         [HttpGet("clinic-users")]
@@ -310,12 +309,12 @@ namespace Base.API.Controllers
             var Repo = _unitOfWork.Repository<ClinicSchedule>();
             var spec = new BaseSpecification<ClinicSchedule>(e => e.ClinicId == ClincId);
             spec.AllIncludes.Add(q => q.Include(c => c.Doctor).ThenInclude(u => u.User));
-            var list = (await Repo.ListAsync(spec)).Select(e => new { e.Doctor.UserId, e.Doctor?.User?.FullName, Day = e.Day.ToString(), e.StartTime, e.EndTime });
-            if (list.Count() == 0)
+            var result = (await Repo.ListAsync(spec)).Select(e => new { e.Doctor.UserId, e.Doctor?.User?.FullName, Day = e.Day.ToString(), e.StartTime, e.EndTime });
+            if (result.Count() == 0)
             {
                 throw new NotFoundException("No Clinic Schedule are currently defined in the system.");
             }
-            return Ok(new { message = "All Clinic Schedule ", list });
+            return Ok(new { message = "All Clinic Schedule ", result });
         }
 
         [HttpGet("clinic-appointmentSlots")]
@@ -338,12 +337,12 @@ namespace Base.API.Controllers
             var Repo = _unitOfWork.Repository<AppointmentSlot>();
             var spec = new BaseSpecification<AppointmentSlot>(e => e.IsBooked == IsBooked && e.DoctorSchedule.ClinicId == ClincId);
             spec.AllIncludes.Add(q => q.Include(c => c.DoctorSchedule).ThenInclude(s => s.Doctor).ThenInclude(s => s.User));
-            var list = (await Repo.ListAsync(spec)).Select(e => new { e.DoctorSchedule?.Doctor?.User?.FullName, Day = e.DoctorSchedule?.Day.ToString(), e.Date, e.StartTime, e.EndTime });
-            if (!list.Any())
+            var result = (await Repo.ListAsync(spec)).Select(e => new { e.DoctorSchedule?.Doctor?.User?.FullName, Day = e.DoctorSchedule?.Day.ToString(), e.Date, e.StartTime, e.EndTime });
+            if (!result.Any())
             {
                 throw new NotFoundException("No Appointments are currently defined in the system.");
             }
-            return Ok(new { message = "All Appointments", list });
+            return Ok(new { message = "All Appointments", result });
         }
 
         [HttpGet("available-usertypes")]
@@ -490,9 +489,30 @@ namespace Base.API.Controllers
             var Repo = _unitOfWork.Repository<Clinic>();
             var spec = new BaseSpecification<Clinic>(e => e.Id == ClincId);
             spec.AllIncludes.Add(q => q.Include(c => c.MedicalSpecialty));
-            var clinics = await Repo.ListAsync(spec);
+            var clinics = await Repo.GetEntityWithSpecAsync(spec);
+            var data = new
+            {
+                clinics.Id,
+                clinics.Name,
+                clinics.Email,
+                clinics.AddressCountry,
+                clinics.AddressGovernRate,
+                clinics.AddressCity,
+                clinics.AddressLocation,
+                clinics.Phone,
+                clinics.Status,
+                clinics.Price,
+                LogoUrl = string.IsNullOrEmpty(clinics.LogoPath)
+                                                   ? null
+                                                   : await _uploadImageService.GetImageAsync(clinics.LogoPath),
 
-            var result = await Task.WhenAll(
+                MedicalSpecialty = new
+                {
+                    clinics.MedicalSpecialty?.Id,
+                    clinics.MedicalSpecialty?.Name
+                }
+            };
+            /*var result = await Task.WhenAll(
                                           clinics.Select(async e => new
                                           {
                                               e.Id,
@@ -514,12 +534,12 @@ namespace Base.API.Controllers
                                                   e.MedicalSpecialty?.Id,
                                                   e.MedicalSpecialty?.Name
                                               }
-                                          }));
-            if (result is null)
+                                          }));*/
+            if (data is null)
             {
                 throw new NotFoundException("No Clinic are currently defined in the system.");
             }
-            return Ok(new { message = "Clinic Data", result });
+            return Ok(new { message = "Clinic Data", data });
         }
 
         [HttpPatch("clinic-setlogo")]
