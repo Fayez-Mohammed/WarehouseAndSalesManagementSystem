@@ -117,12 +117,12 @@ namespace Base.API.Controllers
             }
         }
 
-        [HttpPost("refresh-token")]
+        /*[HttpPost("refresh-token")]
         public async Task<IActionResult> Refresh(RefreshTokenRequest model)
         {
-            var result = await _authService.RefreshRefreshAsync(model);
+            var result = await _authService.RefreshAsync(model);
             return Ok(result);
-        }
+        }*/
 
         /// <summary>
         /// Verifies the login.
@@ -132,6 +132,17 @@ namespace Base.API.Controllers
         /// <exception cref="Base.Services.Implementations.BadRequestException">
         /// An unexpected error occurred during OTP verification.
         /// </exception>
+        /// 
+        /// <remarks>
+        /// هذا الـ endpoint يعرض جميع المستخدمين الموجودين في قاعدة البيانات.
+        /// يمكن فلترة النتائج حسب الحاجة.
+        /// </remarks>
+        /// <response code="200">Token and User info</response>
+        /// <response code="400">Invalid OTP. Please try again later.</response>
+        /// <response code="401">User authentication failed (User ID not found).</response>
+        /// <response code="403">Forbidden to access this end point</response>
+        /// <response code="404">Not Found Any User</response>
+        /// <response code="500">An unexpected error occurred during OTP verification.</response>
         [HttpPost("verify-login")]
         public async Task<IActionResult> VerifyLogin([FromBody] VerifyOtpDTO model)
         {
@@ -195,7 +206,7 @@ namespace Base.API.Controllers
                 }
 
                 await _authService.RegisterAsync(model);
-                return Ok(new { statusCode = 200, message = "The user has successfully registered. Please check your email to confirm your account."});
+                return Ok(new { statusCode = 200, message = "The user has successfully registered. Please check your email to confirm your account." });
 
             }
             catch (Exception ex)
@@ -288,7 +299,7 @@ namespace Base.API.Controllers
 
                 var result = await _authService.VerifyForgetPassword(model);
                 if (string.IsNullOrEmpty(result)) throw new UnauthorizedException("Invalid or expired OTP code.");
-                return Ok(new { Message = "Your Token.", Token=result });
+                return Ok(new { Message = "Your Token.", Token = result });
             }
             catch (Exception ex)
             {
@@ -532,5 +543,34 @@ namespace Base.API.Controllers
         #endregion
 
         #endregion
+
+
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest model)
+        {
+            // read ip & userAgent if not supplied
+            var ip = model.Ip ?? HttpContext.Connection.RemoteIpAddress?.ToString();
+            var ua = model.UserAgent ?? Request.Headers["User-Agent"].ToString();
+
+            try
+            {
+                var response = await _authService.RefreshAsync(model with { Ip = ip, UserAgent = ua });
+                // Option: set refresh token as an HttpOnly Secure cookie
+                var cookieOptions = new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTime.UtcNow.AddDays(int.Parse(/* from config */ "30"))
+                };
+                Response.Cookies.Append("refreshToken", response.RefreshToken, cookieOptions);
+
+                return Ok(response);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Unauthorized();
+            }
+        }
     }
 }

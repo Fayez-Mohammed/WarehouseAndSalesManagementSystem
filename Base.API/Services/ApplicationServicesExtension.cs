@@ -20,6 +20,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -80,6 +81,7 @@ namespace Base.API.Services
             // تسجيل خدمة الذاكرة المؤقتة (IMemoryCache) - ضروري لـ OtpService
             services.AddMemoryCache();
 
+            services.AddScoped<IJwtService, JwtService>();
             // تسجيل خدمة OTP
             services.AddScoped<IOtpService, OtpService>();
             // ربط Repository بـ Dependency Injection
@@ -169,10 +171,21 @@ namespace Base.API.Services
                     Description = "API documentation with unified response format"
                 });
 
+                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "JWT",
+                    In = ParameterLocation.Header,
+                    Description = "JWT Authorization header"
+                });
+
                 var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
                 var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
                 options.IncludeXmlComments(xmlPath);
                 // ✅ نربط كل أكشن بالـ response الفعلي بتاعه
+                options.OperationFilter<AuthorizeCheckOperationFilter>();
                 options.OperationFilter<SwaggerResponseOperationFilter>();
             });
             services.AddHangfire(config =>
@@ -217,6 +230,7 @@ namespace Base.API.Services
             //                }
             //            };
             //        });
+
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
                 options.Events = new JwtBearerEvents

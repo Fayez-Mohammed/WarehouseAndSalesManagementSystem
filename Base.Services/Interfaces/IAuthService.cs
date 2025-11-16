@@ -70,12 +70,12 @@ namespace Base.Services.Interfaces
 
 
 
-        /// <summary>Generates the JWT token.</summary>
+        /*/// <summary>Generates the JWT token.</summary>
         /// <param name="user">The user.</param>
         /// <returns>
         /// <see langword="The"/> JWT token as string.
         /// </returns>
-        Task<string> GenerateJwtToken(ApplicationUser user);
+        Task<string> GenerateJwtToken(ApplicationUser user);*/
 
         #region External Login        
         /// <summary>
@@ -85,6 +85,12 @@ namespace Base.Services.Interfaces
         /// <param name="fullName">The full name.</param>
         /// <returns></returns>
         Task<ExternalLoginResponseDTO> HandleExternalLoginAsync(string email, string fullName);
+        #endregion
+
+        #region RefreshToken
+        Task<RefreshTokenResponse> RefreshAsync(RefreshTokenRequest request);
+        Task<RefreshToken> CreateRefreshTokenAsync(string userId, string ip, string userAgent, TimeSpan ttl);
+        Task RevokeAllUserRefreshTokensAsync(string userId, string reason, string currentIp = null);
         #endregion
 
     }

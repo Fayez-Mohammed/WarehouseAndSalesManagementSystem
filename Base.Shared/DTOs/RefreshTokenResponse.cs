@@ -6,10 +6,10 @@ using System.Threading.Tasks;
 
 namespace Base.Shared.DTOs
 {
-    public class RefreshTokenRespone
+    /*public class RefreshTokenRespone
     {
         public string AccessToken { get; set; }
         public string RefreshToken { get; set; }
 
-    }
+    }*/
 }

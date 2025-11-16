@@ -40,16 +40,20 @@ namespace Base.Services.Implementations
         private readonly IConfiguration _config;
         private const string DefaultRole = "User";
         private const string DefaultUserType = "User";
+        private readonly IJwtService _jwtService;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public AuthService(
+        public AuthService(IJwtService jwtService,
             UserManager<ApplicationUser> userManager,
             RoleManager<IdentityRole> roleManager,
             IEmailSender emailSender,
             IOtpService otpService,
             IUnitOfWork unitOfWork,
             ILogger<AuthService> logger,
-            IConfiguration config)
+            IConfiguration config,
+            IHttpContextAccessor httpContextAccessor)
         {
+            _jwtService = jwtService;
             _userManager = userManager;
             _roleManager = roleManager;
             _emailSender = emailSender;
@@ -57,6 +61,7 @@ namespace Base.Services.Implementations
             _unitOfWork = unitOfWork;
             _logger = logger;
             _config = config;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         /// <summary>
@@ -135,7 +140,7 @@ namespace Base.Services.Implementations
             else
             {
                 // 4.2. المصادقة الثنائية غير مفعلة - إصدار JWT
-                var accesstoken = await GenerateJwtToken(user);
+                var accesstoken = await _jwtService.GenerateJwtTokenAsync(user);
                 if (accesstoken == null)
                 {
                     return new LoginResult
@@ -145,26 +150,34 @@ namespace Base.Services.Implementations
                     };
                 }
 
-                var refreshToken = GenerateRefreshToken();
-                if (refreshToken == null)
-                {
-                    return new LoginResult
-                    {
-                        Success = false,
-                        Message = "Failed to generate Refresh token. Please try again later."
-                    };
-                }
-                refreshToken.UserId = user.Id;
 
+                // Generate secure refresh token (plain)
+                var plainRefreshToken = TokenGenerator.GenerateRandomToken();
+                var refreshTokenHash = TokenGenerator.ComputeSha256Hash(plainRefreshToken);
+
+                // Model metadata
+                var refreshToken = new RefreshToken
+                {
+                    TokenHash = refreshTokenHash,
+                    UserId = user.Id,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    CreatedByIp = _httpContextAccessor?.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    CreatedByUserAgent = _httpContextAccessor?.HttpContext?.Request.Headers["User-Agent"].ToString() ?? "unknown",
+                    ExpiresAtUtc = DateTime.UtcNow.AddDays(30) // من config لو حبيت
+                };
+
+                // Save hashed refresh token to DB
                 var repo = _unitOfWork.Repository<RefreshToken>();
                 await repo.AddAsync(refreshToken);
 
-                if (!(await _unitOfWork.CompleteAsync() > 0))
+                if (await _unitOfWork.CompleteAsync() <= 0)
+                {
                     return new LoginResult
                     {
                         Success = false,
                         Message = "Failed to save refresh token. Please try again later."
                     };
+                }
 
                 var roles = await _userManager.GetRolesAsync(user);
                 return new LoginResult
@@ -174,7 +187,7 @@ namespace Base.Services.Implementations
                     RequiresOtpVerification = user.TwoFactorEnabled,
                     EmailConfirmed = user.EmailConfirmed,
                     Token = accesstoken,
-                    RefreshToken = refreshToken.Token,
+                    RefreshToken = plainRefreshToken,
                     user = new
                     {
                         user.Id,
@@ -188,7 +201,7 @@ namespace Base.Services.Implementations
             }
         }
 
-        public async Task<RefreshTokenRespone> RefreshAsync(RefreshTokenRequest model)
+        /*public async Task<RefreshTokenRespone> RefreshAsync(RefreshTokenRequest model)
         {
             try
             {
@@ -213,7 +226,7 @@ namespace Base.Services.Implementations
             {
                 throw ex;
             }
-        }
+        }*/
 
         /// <summary>
         /// Verifies the login asynchronous.
@@ -226,6 +239,93 @@ namespace Base.Services.Implementations
         {
             try
             {
+                if (model is null)
+                    throw new ArgumentNullException(nameof(model));
+
+                // 1. Validate OTP
+                var (isValid, userId) = await _otpService.ValidateOtpAsync(model.Email, model.Otp);
+                if (!isValid)
+                    return new LoginResult { Success = false, Message = "Invalid OTP. Please try again later." };
+
+                // 2. Load user
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null)
+                    throw new InvalidOperationException("User authentication failed (User ID not found).");
+
+                // Remove OTP (best effort)
+                try { await _otpService.RemoveOtpAsync(model.Email); } catch { }
+
+                // 3. Generate access token
+                var accessToken = await _jwtService.GenerateJwtTokenAsync(user);
+                if (accessToken == null)
+                {
+                    return new LoginResult
+                    {
+                        Success = false,
+                        Message = "Failed to generate authentication token. Please try again later."
+                    };
+                }
+
+                // Generate secure refresh token (plain)
+                var plainRefreshToken = TokenGenerator.GenerateRandomToken();
+                var refreshTokenHash = TokenGenerator.ComputeSha256Hash(plainRefreshToken);
+
+                // Model metadata
+                var refreshToken = new RefreshToken
+                {
+                    TokenHash = refreshTokenHash,
+                    UserId = user.Id,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    CreatedByIp = _httpContextAccessor?.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    CreatedByUserAgent = _httpContextAccessor?.HttpContext?.Request.Headers["User-Agent"].ToString() ?? "unknown",
+                    ExpiresAtUtc = DateTime.UtcNow.AddDays(30) // من config لو حبيت
+                };
+
+                // Save hashed refresh token to DB
+                var repo = _unitOfWork.Repository<RefreshToken>();
+                await repo.AddAsync(refreshToken);
+
+                if (await _unitOfWork.CompleteAsync() <= 0)
+                {
+                    return new LoginResult
+                    {
+                        Success = false,
+                        Message = "Failed to save refresh token. Please try again later."
+                    };
+                }
+
+                var roles = await _userManager.GetRolesAsync(user);
+
+                // 5. Return login result (access + refresh)
+                return new LoginResult
+                {
+                    Success = true,
+                    Message = "Login successful.",
+                    RequiresOtpVerification = user.TwoFactorEnabled,
+                    EmailConfirmed = user.EmailConfirmed,
+                    Token = accessToken,
+                    RefreshToken = plainRefreshToken, // raw token sent to client ONLY
+                    user = new
+                    {
+                        user.Id,
+                        user.UserName,
+                        user.Email,
+                        user.UserType,
+                        Roles = roles
+                    }
+                };
+            }
+            catch
+            {
+                try { await _otpService.RemoveOtpAsync(model?.Email!); } catch { }
+                throw;
+            }
+        }
+
+        /*public async Task<LoginResult> VerifyLoginAsync(VerifyOtpDTO model)
+        {
+            try
+            {
                 if (model is null) throw new ArgumentNullException(nameof(model));
 
                 var (isValid, userId) = await _otpService.ValidateOtpAsync(model.Email, model.Otp);
@@ -235,9 +335,9 @@ namespace Base.Services.Implementations
                 if (user == null)
                     throw new InvalidOperationException("User authentication failed (User ID in OTP store not found).");
 
-                try { await _otpService.RemoveOtpAsync(model.Email); } catch { /* best-effort */ }
+                try { await _otpService.RemoveOtpAsync(model.Email); } catch {  best-effort }
 
-                var token = await GenerateJwtToken(user);
+                var token = await _jwtService.GenerateJwtTokenAsync(user);
                 if (token == null)
                 {
                     return new LoginResult
@@ -269,10 +369,10 @@ namespace Base.Services.Implementations
             }
             catch (Exception)
             {
-                try { await _otpService.RemoveOtpAsync(model.Email); } catch { /* best-effort */ }
+                try { await _otpService.RemoveOtpAsync(model.Email); } catch { best-effort }
                 throw;
             }
-        }
+        }*/
 
         /// <summary>Sends the otp asynchronous.</summary>
         /// <param name="email">The email.</param>
@@ -298,7 +398,6 @@ namespace Base.Services.Implementations
                 throw new BadRequestException("Failed to send OTP");
             }
         }
-
 
         /// <summary>
         /// Returns true when verification succeeded; false when OTP invalid/expired.
@@ -455,71 +554,6 @@ namespace Base.Services.Implementations
         }
 
         /// <summary>
-        /// Generates the JWT token.
-        /// </summary>
-        /// <param name="user">The user.</param>
-        /// <returns>
-        ///   <see langword="The" /> JWT token as string.
-        /// </returns>
-        public async Task<string> GenerateJwtToken(ApplicationUser user)
-        {
-            // 1. Protective: Check for vital JWT configurations
-            var jwtKey = _config["Jwt:Key"];
-            var jwtIssuer = _config["Jwt:Issuer"];
-            var jwtAudience = _config["Jwt:Audience"];
-
-            // Check key length (min 32 chars for 256-bit security)
-            if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32 || string.IsNullOrEmpty(jwtIssuer) || string.IsNullOrEmpty(jwtAudience))
-            {
-                // Log the error internally
-                _logger?.LogError("JWT configuration settings are missing or key is too short (min 32 characters required).");
-                return null;
-            }
-
-            try
-            {
-                // 2. Build Core Claims
-                var claims = new List<Claim>
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-                new Claim(ClaimTypes.NameIdentifier, user.Id),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
-                new Claim(ClaimTypes.Name, user.UserName ?? string.Empty)
-            };
-
-                // Get and add Roles
-                var roles = await _userManager.GetRolesAsync(user);
-                foreach (var role in roles)
-                {
-                    claims.Add(new Claim(ClaimTypes.Role, role));
-                }
-
-                // 3. Generate Key and Credentials
-                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
-                var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-                // Use UtcNow for better time zone handling
-                var token = new JwtSecurityToken(
-                    issuer: jwtIssuer,
-                    audience: jwtAudience,
-                    claims: claims,
-                    notBefore: DateTime.UtcNow,
-                    expires: DateTime.UtcNow.AddHours(1),
-                    signingCredentials: creds
-                );
-
-                return new JwtSecurityTokenHandler().WriteToken(token);
-            }
-            catch (Exception ex)
-            {
-                // Log any unexpected failure during token generation
-                _logger?.LogError(ex, "An unexpected error occurred during JWT token generation for user {UserId}.", user.Id);
-                return null;
-            }
-        }
-
-        /// <summary>
         /// Handel External Login
         /// </summary>
         /// <param name="email"></param>
@@ -609,7 +643,7 @@ namespace Base.Services.Implementations
                 // 4. توليد JWT وإرجاع البيانات
                 // ----------------------------------------------------------------------
 
-                var token = await GenerateJwtToken(user);
+                var token = await _jwtService.GenerateJwtTokenAsync(user);
 
                 if (token == null)
                 {
@@ -715,6 +749,125 @@ namespace Base.Services.Implementations
             }
         }
 
+        #region RefreshToken
+        public async Task<RefreshToken> CreateRefreshTokenAsync(string userId, string ip, string userAgent, TimeSpan ttl)
+        {
+            var tokenPlain = TokenGenerator.GenerateRandomToken();
+            var tokenHash = TokenGenerator.ComputeSha256Hash(tokenPlain);
+
+            var refreshToken = new RefreshToken
+            {
+                TokenHash = tokenHash,
+                UserId = userId,
+                CreatedAtUtc = DateTime.UtcNow,
+                CreatedByIp = ip ?? "unknown",
+                CreatedByUserAgent = userAgent ?? "unknown",
+                ExpiresAtUtc = DateTime.UtcNow.Add(ttl)
+            };
+
+            var repo = _unitOfWork.Repository<RefreshToken>();
+            await repo.AddAsync(refreshToken);
+            await _unitOfWork.CompleteAsync();
+
+            // Return object with plain text token in memory so caller can send it to client
+            // but DO NOT persist plain token
+            return new RefreshToken
+            {
+                Id = refreshToken.Id,
+                TokenHash = tokenHash,
+                UserId = refreshToken.UserId,
+                CreatedAtUtc = refreshToken.CreatedAtUtc,
+                CreatedByIp = refreshToken.CreatedByIp,
+                CreatedByUserAgent = refreshToken.CreatedByUserAgent,
+                ExpiresAtUtc = refreshToken.ExpiresAtUtc,
+                RevokedAtUtc = null
+            };
+        }
+
+        public async Task<RefreshTokenResponse> RefreshAsync(RefreshTokenRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.RefreshToken))
+                throw new UnauthorizedAccessException("Refresh token required.");
+
+            var incomingHash = TokenGenerator.ComputeSha256Hash(request.RefreshToken);
+
+            var repo = _unitOfWork.Repository<RefreshToken>();
+            var spec = new BaseSpecification<RefreshToken>(t => t.TokenHash == incomingHash);
+            spec.AllIncludes.Add(t => t.Include(r => r.User)); // include user if mapped
+            var oldToken = await repo.GetEntityWithSpecAsync(spec);
+            if (oldToken == null || !oldToken.IsActive)
+            {
+                _logger.LogWarning("Invalid or inactive refresh token used. IP:{Ip} UA:{UA}", request.Ip, request.UserAgent);
+                throw new UnauthorizedAccessException("Invalid or expired refresh token");
+            }
+
+            // We will rotate token inside a transaction to avoid race conditions
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+
+            try
+            {
+                // Mark the old token revoked
+                oldToken.RevokedAtUtc = DateTime.UtcNow;
+                oldToken.RevokedByIp = request.Ip;
+                oldToken.ReasonRevoked = "Rotated";
+
+                // generate new token
+                var newPlainToken = TokenGenerator.GenerateRandomToken();
+                var newHash = TokenGenerator.ComputeSha256Hash(newPlainToken);
+
+                var newToken = new RefreshToken
+                {
+                    TokenHash = newHash,
+                    UserId = oldToken.UserId,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    CreatedByIp = request.Ip ?? "unknown",
+                    CreatedByUserAgent = request.UserAgent ?? "unknown",
+                    ExpiresAtUtc = DateTime.UtcNow.AddDays(int.Parse(_config["Auth:RefreshTokenDays"] ?? "30"))
+                };
+
+                // link old -> new
+                oldToken.ReplacedByTokenHash = newHash;
+                await repo.AddAsync(newToken);
+                await repo.UpdateAsync(oldToken);
+                await _unitOfWork.CompleteAsync();
+                await transaction.CommitAsync();
+
+                // load user (from identity or your users table)
+                var user = await _userManager.FindByIdAsync(oldToken.UserId);
+                if (user == null || !user.IsActive)
+                {
+                    _logger.LogWarning("User not found or inactive during refresh. UserId:{UserId}", oldToken.UserId);
+                    throw new UnauthorizedAccessException("User is inactive.");
+                }
+
+                var accessToken = await _jwtService.GenerateJwtTokenAsync(user);
+
+                // return new access token and the plain new refresh token
+                return new RefreshTokenResponse(accessToken, newPlainToken);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error while rotating refresh token for Hash:{Hash}", incomingHash);
+                throw; // preserve stack trace
+            }
+        }
+
+        public async Task RevokeAllUserRefreshTokensAsync(string userId, string reason, string currentIp = null)
+        {
+            var repo = _unitOfWork.Repository<RefreshToken>();
+            var spec = new BaseSpecification<RefreshToken>(t => t.UserId == userId && t.RevokedAtUtc == null);
+            var tokens = await repo.ListAsync(spec);
+            foreach (var t in tokens)
+            {
+                t.RevokedAtUtc = DateTime.UtcNow;
+                t.ReasonRevoked = reason;
+                t.RevokedByIp = currentIp;
+            }
+            await _unitOfWork.CompleteAsync();
+        }
+        #endregion
+
         #region helper
         /// <summary>
         /// Maps the DTO to ApplicationUser and creates the user in Identity system.
@@ -813,7 +966,73 @@ namespace Base.Services.Implementations
             }
         }
 
-        private RefreshToken GenerateRefreshToken()
+        /*
+           /// <summary>
+        /// Generates the JWT token.
+        /// </summary>
+        /// <param name="user">The user.</param>
+        /// <returns>
+        ///   <see langword="The" /> JWT token as string.
+        /// </returns>
+        public async Task<string> GenerateJwtToken(ApplicationUser user)
+        {
+            // 1. Protective: Check for vital JWT configurations
+            var jwtKey = _config["Jwt:Key"];
+            var jwtIssuer = _config["Jwt:Issuer"];
+            var jwtAudience = _config["Jwt:Audience"];
+
+            // Check key length (min 32 chars for 256-bit security)
+            if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32 || string.IsNullOrEmpty(jwtIssuer) || string.IsNullOrEmpty(jwtAudience))
+            {
+                // Log the error internally
+                _logger?.LogError("JWT configuration settings are missing or key is too short (min 32 characters required).");
+                return null;
+            }
+
+            try
+            {
+                // 2. Build Core Claims
+                var claims = new List<Claim>
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id),
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
+                new Claim(ClaimTypes.Name, user.UserName ?? string.Empty),
+                new Claim("UserType", user.UserType ?? string.Empty)
+            };
+
+                // Get and add Roles
+                var roles = await _userManager.GetRolesAsync(user);
+                foreach (var role in roles)
+                {
+                    claims.Add(new Claim(ClaimTypes.Role, role));
+                }
+
+                // 3. Generate Key and Credentials
+                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+                var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+                // Use UtcNow for better time zone handling
+                var token = new JwtSecurityToken(
+                    issuer: jwtIssuer,
+                    audience: jwtAudience,
+                    claims: claims,
+                    notBefore: DateTime.UtcNow,
+                    expires: DateTime.UtcNow.AddMinutes(1),
+                    signingCredentials: creds
+                );
+
+                return new JwtSecurityTokenHandler().WriteToken(token);
+            }
+            catch (Exception ex)
+            {
+                // Log any unexpected failure during token generation
+                _logger?.LogError(ex, "An unexpected error occurred during JWT token generation for user {UserId}.", user.Id);
+                return null;
+            }
+        } 
+         private RefreshToken GenerateRefreshToken()
         {
             return new RefreshToken
             {
@@ -838,7 +1057,7 @@ namespace Base.Services.Implementations
             if (await _unitOfWork.CompleteAsync() > 0) return true;
             
             return false;
-        }
+        }*/
         #endregion
     }
 }
