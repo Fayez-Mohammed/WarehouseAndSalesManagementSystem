@@ -117,6 +117,12 @@ namespace Base.API.Controllers
             }
         }
 
+        [HttpPost("refresh-token")]
+        public async Task<IActionResult> Refresh(RefreshTokenRequest model)
+        {
+            var result = await _authService.RefreshRefreshAsync(model);
+            return Ok(result);
+        }
 
         /// <summary>
         /// Verifies the login.

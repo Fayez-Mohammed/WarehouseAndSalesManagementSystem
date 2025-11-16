@@ -18,6 +18,7 @@ namespace Base.Shared.DTOs
         public bool EmailConfirmed { get; set; } = false;
         public string Message { get; set; }
         public string Token { get; set; }
+        public string RefreshToken { get; set; }
         public object user { get; set; }
         //public LoginResponse? Data { get; set; }
     }

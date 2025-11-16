@@ -124,6 +124,18 @@ namespace Base.DAL.Config
         }
     }
 
+    public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
+    {
+        public void Configure(EntityTypeBuilder<RefreshToken> builder)
+        {
+            builder.HasIndex(r => r.Token)
+            .IsUnique();
+
+            builder.HasOne(r => r.User)
+                .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(r => r.UserId);
+        }
+    }
     // Clinic Configuration
     public class ClinicConfiguration : BaseEntityConfigurations<Clinic>
     {

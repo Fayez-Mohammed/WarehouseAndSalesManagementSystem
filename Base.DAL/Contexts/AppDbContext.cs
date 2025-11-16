@@ -32,6 +32,7 @@ namespace Base.DAL.Contexts
         public DbSet<ClinicSchedule> ClinicSchedule { get; set; }
         public DbSet<AppointmentSlot> AppointmentSlot { get; set; }
         public DbSet<Appointment> Appointment { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

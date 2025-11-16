@@ -13,6 +13,7 @@ namespace Base.DAL.Models
         public string UserType { get; set; }
         public bool IsActive { get; set; } = true;
         public string? ImagePath { get; set; }
+        public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 
         public virtual UserProfile? Profile { get; set; }
         public virtual SystemAdminProfile? SystemAdminProfile { get; set; }

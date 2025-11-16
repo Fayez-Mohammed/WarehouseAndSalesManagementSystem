@@ -19,7 +19,6 @@ namespace Base.Repo.Implementations
         {
             _dbContext = dbContext;
         }
-
         // 🟢 وقائي: تم تغيير الاسم ليتناسب مع الواجهة
         public async Task<int> CompleteAsync() => await _dbContext.SaveChangesAsync();
 

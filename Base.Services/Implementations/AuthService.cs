@@ -21,6 +21,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Net;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using static Azure.Core.HttpHeader;
@@ -84,7 +85,7 @@ namespace Base.Services.Implementations
             {
                 try
                 {
-                    SendOtpAsync(user.Email);
+                    await SendOtpAsync(user.Email);
                 }
                 catch (Exception ex)
                 {
@@ -134,15 +135,37 @@ namespace Base.Services.Implementations
             else
             {
                 // 4.2. المصادقة الثنائية غير مفعلة - إصدار JWT
-                var token = await GenerateJwtToken(user);
-                if (token == null)
+                var accesstoken = await GenerateJwtToken(user);
+                if (accesstoken == null)
                 {
                     return new LoginResult
                     {
                         Success = false,
-                        Message = "Failed to generate authentication token. Please try again later."
+                        Message = "Failed to generate access token token. Please try again later."
                     };
                 }
+
+                var refreshToken = GenerateRefreshToken();
+                if (refreshToken == null)
+                {
+                    return new LoginResult
+                    {
+                        Success = false,
+                        Message = "Failed to generate Refresh token. Please try again later."
+                    };
+                }
+                refreshToken.UserId = user.Id;
+
+                var repo = _unitOfWork.Repository<RefreshToken>();
+                await repo.AddAsync(refreshToken);
+
+                if (!(await _unitOfWork.CompleteAsync() > 0))
+                    return new LoginResult
+                    {
+                        Success = false,
+                        Message = "Failed to save refresh token. Please try again later."
+                    };
+
                 var roles = await _userManager.GetRolesAsync(user);
                 return new LoginResult
                 {
@@ -150,7 +173,8 @@ namespace Base.Services.Implementations
                     Message = "Login successful.",
                     RequiresOtpVerification = user.TwoFactorEnabled,
                     EmailConfirmed = user.EmailConfirmed,
-                    Token = token,
+                    Token = accesstoken,
+                    RefreshToken = refreshToken.Token,
                     user = new
                     {
                         user.Id,
@@ -164,6 +188,32 @@ namespace Base.Services.Implementations
             }
         }
 
+        public async Task<RefreshTokenRespone> RefreshAsync(RefreshTokenRequest model)
+        {
+            try
+            {
+                var oldToken = await GetByTokenAsync(model.RefreshToken);
+                if (oldToken == null || !oldToken.IsActive) throw new UnauthorizedException("Invalid or expired refresh token");
+                // Optionally update cookie
+                oldToken.Revoked = DateTime.UtcNow;
+                var newRefreshToken = GenerateRefreshToken();
+                newRefreshToken.UserId = oldToken.UserId;
+                await AddTokenAsync(newRefreshToken);
+
+                var user = oldToken.User;
+                var newAccessToken = await GenerateJwtToken(user);
+
+                return new RefreshTokenRespone
+                {
+                    AccessToken = newAccessToken,
+                    RefreshToken = newRefreshToken.Token
+                };
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
 
         /// <summary>
         /// Verifies the login asynchronous.
@@ -306,7 +356,7 @@ namespace Base.Services.Implementations
                 var user = await _userManager.FindByIdAsync(userId);
                 if (user == null)
                     throw new InvalidOperationException($"Security flow error: User Email '{model.Email}' associated with valid OTP was not found.");
-                
+
                 var token = await _userManager.GeneratePasswordResetTokenAsync(user);
 
                 try { await _otpService.RemoveOtpAsync(model.Email); } catch { /* best-effort */ }
@@ -346,8 +396,8 @@ namespace Base.Services.Implementations
                 if (user == null)
                     throw new BadRequestException("Invalid request");
 
-                var isValid = await _userManager.VerifyUserTokenAsync(user,_userManager.Options.Tokens.PasswordResetTokenProvider,
-                    "ResetPassword",model.Token);
+                var isValid = await _userManager.VerifyUserTokenAsync(user, _userManager.Options.Tokens.PasswordResetTokenProvider,
+                    "ResetPassword", model.Token);
                 if (!isValid) return false;
 
                 var result = await _userManager.ResetPasswordAsync(user, model.Token, model.NewPassword);
@@ -594,7 +644,6 @@ namespace Base.Services.Implementations
         }
 
 
-        #region Registertion refactor
         public async Task RegisterAsync(RegisterDTO model)
         {
             // 1. Input Validation
@@ -611,7 +660,7 @@ namespace Base.Services.Implementations
             try
             {
                 // 3. Mapping and Identity Creation
-                var user =await MapAndCreateUser(model);
+                var user = await MapAndCreateUser(model);
 
                 // 4. Identity Creation - الآن نستخدم await بشكل صحيح
                 var createUserResult = await _userManager.CreateAsync(user, model.Password);
@@ -665,7 +714,8 @@ namespace Base.Services.Implementations
                 throw new InternalServerException("An unexpected error occurred during registration. Please try again.");
             }
         }
-        #region 
+
+        #region helper
         /// <summary>
         /// Maps the DTO to ApplicationUser and creates the user in Identity system.
         /// </summary>
@@ -762,7 +812,33 @@ namespace Base.Services.Implementations
                 _logger.LogWarning(ex, "Failed to send OTP after successful registration for {Email}", user.Email);
             }
         }
-        #endregion
+
+        private RefreshToken GenerateRefreshToken()
+        {
+            return new RefreshToken
+            {
+                Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
+                Expires = DateTime.UtcNow.AddDays(7),
+                Created = DateTime.UtcNow
+            };
+        }
+
+        public async Task<RefreshToken> GetByTokenAsync(string token)
+        {
+            var repo = _unitOfWork.Repository<RefreshToken>();
+            var spec = new BaseSpecification<RefreshToken>(t => t.Token == token);
+            spec.AllIncludes.Add(e => e.Include(d => d.User));
+            var tokenobj = await repo.GetEntityWithSpecAsync(spec);
+            return tokenobj;
+        }
+        public async Task<bool> AddTokenAsync(RefreshToken token)
+        {
+            var repo = _unitOfWork.Repository<RefreshToken>();
+            var tokenobj = await repo.AddAsync(token);
+            if (await _unitOfWork.CompleteAsync() > 0) return true;
+            
+            return false;
+        }
         #endregion
     }
 }

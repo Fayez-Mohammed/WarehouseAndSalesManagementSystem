@@ -13,5 +13,6 @@ namespace Base.Repo.Interfaces
 
         // 🟢 وقائي: توقيع المعاملات سليم
         Task<IDbContextTransaction> BeginTransactionAsync();
+
     }
 }
