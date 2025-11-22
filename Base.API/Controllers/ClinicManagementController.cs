@@ -1,11 +1,11 @@
 ﻿using Azure.Core;
 using Base.API.DTOs;
+using Base.Shared.DTOs;
 using Base.DAL.Models.BaseModels;
 using Base.DAL.Models.SystemModels;
 using Base.Repo.Interfaces;
 using Base.Services.Implementations;
 using Base.Services.Interfaces;
-using Base.Shared.DTOs;
 using Base.Shared.Responses.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -57,8 +57,12 @@ namespace Base.API.Controllers
                     throw new BadRequestException(errors);
                 }
 
-                AvailableUserTypesForCreateUsers searchTypeEnum;
-                if (!Enum.TryParse<AvailableUserTypesForCreateUsers>(model.UserType, true, out searchTypeEnum))
+                //AvailableUserTypesForCreateUsers searchTypeEnum;
+                //if (!Enum.TryParse<AvailableUserTypesForCreateUsers>(model.UserType, true, out searchTypeEnum))
+                //    throw new InternalServerException("Invalid user type specified.");
+
+                UserTypes searchTypeEnum = model.UserType;
+                if (!Enum.IsDefined(typeof(UserTypes), model.UserType))
                     throw new InternalServerException("Invalid user type specified.");
 
                 var checkEmailExsitClincRepo = _unitOfWork.Repository<Clinic>();
@@ -103,17 +107,17 @@ namespace Base.API.Controllers
 
                 switch (searchTypeEnum)
                 {
-                    case AvailableUserTypesForCreateUsers.ClinicDoctor:
+                    case UserTypes.ClinicDoctor:
                         var ClinicDoctorRepository = _unitOfWork.Repository<ClincDoctorProfile>();
                         var Doctorprofile = model.ToClincDoctor();
                         await ClinicDoctorRepository.AddAsync(Doctorprofile);
                         break;
-                    case AvailableUserTypesForCreateUsers.ClinicReceptionist:
+                    case UserTypes.ClinicReceptionist:
                         var ClinicReceptionistRepository = _unitOfWork.Repository<ClincReceptionistProfile>();
                         var Receptionistprofile = model.ToClincReceptionist();
                         await ClinicReceptionistRepository.AddAsync(Receptionistprofile);
                         break;
-                    case AvailableUserTypesForCreateUsers.ClinicAdmin:
+                    case UserTypes.ClinicAdmin:
                         var ClinicAdminRepository = _unitOfWork.Repository<ClincAdminProfile>();
                         var Adminprofile = model.ToClincAdminProfile();
                         await ClinicAdminRepository.AddAsync(Adminprofile);
@@ -134,7 +138,7 @@ namespace Base.API.Controllers
                     throw new InternalServerException("Database transaction failed to save changes.");
                 }
             }
-            catch (Exception ex) 
+            catch (Exception ex)
             {
                 await transaction.RollbackAsync();
                 if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
@@ -202,11 +206,13 @@ namespace Base.API.Controllers
             var userrepository = _unitOfWork.Repository<ClincAdminProfile>();
             var targetClinicId = (await userrepository.GetEntityWithSpecAsync(spec)).ClincId;
 
-            var validUserTypeNames = Enum.GetNames(typeof(AvailableUserTypesForCreateUsers));
+            //var validUserTypeNames = Enum.GetNames(typeof(AvailableUserTypesForCreateUsers));
+            //Expression<Func<ApplicationUser, bool>> expr = u =>
+            // validUserTypeNames.Contains(u.UserType) &&
             Expression<Func<ApplicationUser, bool>> expr = u =>
-             validUserTypeNames.Contains(u.UserType) &&
+             Enum.IsDefined(typeof(UserTypes), u.Type) &&
              (
-                 (u.ClincAdminProfile != null && u.ClincAdminProfile.ClincId == targetClinicId) ||
+                    (u.ClincAdminProfile != null && u.ClincAdminProfile.ClincId == targetClinicId) ||
                  (u.ClincDoctorProfile != null && u.ClincDoctorProfile.ClincId == targetClinicId) ||
                  (u.ClincReceptionistProfile != null && u.ClincReceptionistProfile.ClincId == targetClinicId)
              );
@@ -215,7 +221,8 @@ namespace Base.API.Controllers
                 e.Id,
                 e.FullName,
                 e.Email,
-                e.UserType,
+                //e.UserType,
+                e.Type,
                 e.IsActive
             }).ToHashSet();
 
@@ -658,7 +665,8 @@ namespace Base.API.Controllers
         public required string FullName { get; set; }
 
         [Required]
-        public required string UserType { get; set; }
+        //public required string UserType { get; set; }
+        public required UserTypes UserType { get; set; }
         public string? UserId { get; set; }
 
 
@@ -680,7 +688,8 @@ namespace Base.API.Controllers
             return new ApplicationUser
             {
                 FullName = Dto.FullName,
-                UserType = Dto.UserType,
+                //UserType = Dto.UserType,
+                Type = Dto.UserType,
                 UserName = Dto.Email,
                 Email = Dto.Email
             };

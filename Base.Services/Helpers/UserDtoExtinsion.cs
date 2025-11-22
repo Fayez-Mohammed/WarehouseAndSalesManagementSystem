@@ -24,7 +24,8 @@ namespace Base.Services.Helpers
                 UserName = user.UserName ?? "NA",
                 Email = user.Email ?? "NA",
                 PhoneNumber = user.PhoneNumber,
-                UserType = user.UserType,
+                //UserType = user.UserType,
+                UserType= user.Type,
                 IsActive = user.IsActive,
                 ImagePath = user.ImagePath
             };
@@ -51,7 +52,7 @@ namespace Base.Services.Helpers
                 UserName = Dto.Email ?? "NA",
                 Email = Dto.Email ?? "NA",
                 PhoneNumber = Dto.PhoneNumber,
-                UserType = Dto.UserType,
+                Type = Dto.UserType,
             };
 
         }

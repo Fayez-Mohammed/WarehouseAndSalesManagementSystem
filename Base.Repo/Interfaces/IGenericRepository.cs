@@ -17,7 +17,7 @@ namespace Base.Repo.Interfaces
 
         Task UpdateAsync(T entity);
         Task DeleteAsync(T entity);
-
+        Task RemoveRangeAsync(IEnumerable<T> entities);
         // -------------------- عمليات القراءة -----------------------
         Task<T> GetByIdAsync(string id, bool asNoTracking = false);
         Task<IReadOnlyList<T>> ListAllAsync(bool asNoTracking = false);

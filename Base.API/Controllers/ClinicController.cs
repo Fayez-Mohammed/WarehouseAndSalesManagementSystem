@@ -194,7 +194,8 @@ namespace Base.API.Controllers
                     ClincadminUser = new ApplicationUser
                     {
                         FullName = request.Name,
-                        UserType = "ClincAdmin",
+                        Type = UserTypes.ClinicAdmin, 
+                        //UserType = "ClincAdmin",
                         UserName = request.Email,
                         Email = request.Email,
                         EmailConfirmed = true,
@@ -452,7 +453,8 @@ namespace Base.API.Controllers
                 var ClincadminUser = new ApplicationUser
                 {
                     FullName = model.FullName,
-                    UserType = "ClincAdmin",
+                    //UserType = "ClincAdmin",
+                    Type = UserTypes.ClinicAdmin,
                     UserName = model.Email,
                     Email = model.Email,
                     EmailConfirmed = true,

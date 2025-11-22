@@ -137,7 +137,7 @@ namespace Base.Services.Implementations
                     Id = user.Id,
                     UserName = user.UserName,
                     Email = user.Email,
-                    UserType = user.UserType,
+                    UserType = user.Type,
                     Roles = roles
                 }
             };
@@ -200,7 +200,7 @@ namespace Base.Services.Implementations
                     Id = user.Id,
                     UserName = user.UserName,
                     Email = user.Email,
-                    UserType = user.UserType,
+                    UserType = user.Type,
                     Roles = roles
                 }
             };
@@ -231,6 +231,9 @@ namespace Base.Services.Implementations
             }
 
             await _refreshTokenService.RevokeAllUserTokensAsync(userId, "User logged out");
+           
+            // إضافة Access Token الحالي للـ Blacklist مباشرة من Header
+            await _userService.AddAccessTokenToBlackListFromHeaderAsync();
 
             return new ApiResponse
             {
@@ -274,7 +277,7 @@ namespace Base.Services.Implementations
                 PhoneNumber = model.PhoneNumber,
                 TwoFactorEnabled = false,
                 IsActive = true,
-                UserType = "User",
+                Type = UserTypes.User,
                 EmailConfirmed = false
             };
 
@@ -547,7 +550,7 @@ namespace Base.Services.Implementations
                     Id = user.Id,
                     UserName = user.UserName,
                     Email = user.Email,
-                    UserType = user.UserType,
+                    UserType = user.Type,
                     Roles = roles
                 }
             );

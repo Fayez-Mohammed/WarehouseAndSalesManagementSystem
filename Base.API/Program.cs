@@ -1,4 +1,5 @@
-﻿using Base.API.Filters;
+﻿using Base.API.Authorization;
+using Base.API.Filters;
 using Base.API.MiddleWare;
 using Base.API.Services;
 using Base.DAL.Contexts;
@@ -52,7 +53,7 @@ internal class Program
                 var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
                 await IdentitySeeder.SeedAdminAsync(userManager, roleManager);
-                await IdentitySeeder.SeedDataAsync(dbContext);
+                //await IdentitySeeder.SeedDataAsync(dbContext);
 
             }
             catch (Exception ex)
@@ -68,6 +69,7 @@ internal class Program
             app.UseSwagger();
             app.UseSwaggerUI();
         }
+        app.UseMiddleware<TokenBlacklistMiddleware>();
 
         app.UseStaticFiles();
 
@@ -115,13 +117,23 @@ internal class Program
         RecurringJob.AddOrUpdate<AppointmentSlotGeneratorJob>(
             "GenerateAppointmentSlots",
             job => job.GenerateMonthlySlotsAsync(),
-            "0 2 * * *",
+            "0 2 * * *", //"Mintues Hours DayInmonth Month DayInWeek"
             new RecurringJobOptions
             {
                 TimeZone = cairoTimeZone
             }
         );
 
+        // 2) 💥 Job تنظيف الـ Blacklist (كل ساعة)
+        RecurringJob.AddOrUpdate<CleanupBlacklistedTokensService>(
+            "CleanupBlacklistedTokens",
+            job => job.ExecuteAsync(),
+            Cron.Hourly, // لو عايزة كل ساعتين: "0 */2 * * *"
+            new RecurringJobOptions
+            {
+                TimeZone = cairoTimeZone
+            }
+        );
         // 💡 تعيين نقطة النهاية الافتراضية للتعامل مع الطلبات غير المعروفة
         app.MapFallback(async context =>
         {

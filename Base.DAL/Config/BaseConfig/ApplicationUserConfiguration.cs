@@ -1,5 +1,6 @@
 ﻿using Base.DAL.Models.BaseModels;
 using Base.DAL.Models.SystemModels;
+using Base.Shared.DTOs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System;
@@ -17,7 +18,10 @@ namespace Base.DAL.Config.BaseConfig
         {
             builder.HasKey(u => u.Id);
             builder.Property(u => u.FullName).IsRequired().HasMaxLength(150);
-            builder.Property(u => u.UserType).IsRequired().HasMaxLength(50);
+            //builder.Property(u => u.UserType).IsRequired().HasMaxLength(50);
+
+            builder.Property(u => u.Type).HasConversion(v => v.ToString(),
+            v => (UserTypes)Enum.Parse(typeof(UserTypes), v));
 
             builder.HasOne(u => u.Profile)
                    .WithOne(p => p.User)

@@ -1,6 +1,7 @@
 ﻿using Base.DAL.Contexts;
 using Base.DAL.Models.BaseModels;
 using Base.DAL.Models.SystemModels;
+using Base.Shared.DTOs;
 using Microsoft.AspNetCore.Identity;
 using System.Threading.Tasks;
 
@@ -10,7 +11,7 @@ namespace Base.DAL.Seeding
     {
         public static async Task SeedAdminAsync(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
         {
-            string[] roleNames = { "SystemAdmin", "ClincAdmin", "ClincDoctor", "ClincReceptionis" };
+            var roleNames = Enum.GetNames<UserTypes>();
             // ✅ تأكد من وجود كل Role
             foreach (var roleName in roleNames)
             {
@@ -29,7 +30,7 @@ namespace Base.DAL.Seeding
                 adminUser = new ApplicationUser
                 {
                     FullName = "Islam helmy",
-                    UserType = "SystemAdmin",
+                    Type = UserTypes.SystemAdmin,
                     UserName = adminEmail,
                     Email = adminEmail,
                     EmailConfirmed = true
@@ -40,24 +41,24 @@ namespace Base.DAL.Seeding
                 if (result.Succeeded)
                 {
                     // 🟣 أضف الأدمن إلى دور "Admin"
-                    await userManager.AddToRoleAsync(adminUser, "SystemAdmin");
+                    await userManager.AddToRoleAsync(adminUser, UserTypes.SystemAdmin.ToString());
                 }
             }
         }
-        public static async Task SeedDataAsync(AppDbContext context)
-        {
-            if (!context.MedicalSpecialties.Any())
-            {
-                var specialties = SeedMedicalSpecialty();
-                context.MedicalSpecialties.AddRange(specialties);
-            }
-            if (!context.UserTypes.Any())
-            {
-                var userTypes = SeedUserType();
-                context.UserTypes.AddRange(userTypes);
-            }
-            await context.SaveChangesAsync();
-        }
+        //public static async Task SeedDataAsync(AppDbContext context)
+        //{
+        //    if (!context.MedicalSpecialties.Any())
+        //    {
+        //        var specialties = SeedMedicalSpecialty();
+        //        context.MedicalSpecialties.AddRange(specialties);
+        //    }
+        //    if (!context.UserTypes.Any())
+        //    {
+        //        var userTypes = SeedUserType();
+        //        context.UserTypes.AddRange(userTypes);
+        //    }
+        //    await context.SaveChangesAsync();
+        //}
         public static List<MedicalSpecialty> SeedMedicalSpecialty()
         {
             return new List<MedicalSpecialty>
@@ -124,17 +125,17 @@ namespace Base.DAL.Seeding
             }
         };
         }
-        public static List<UserType> SeedUserType()
-        {
-            return new List<UserType>()
-            {
-            new UserType(){ Name = "SystemAdmin"},
-            new UserType(){ Name = "ClincAdmin"},
-            new UserType(){ Name = "ClincDoctor"},
-            new UserType(){ Name = "ClincReceptionis"},
-            new UserType(){ Name = "User"},
-            new UserType(){ Name = "SystemUser"}
-            };
-        }
+        //public static List<UserType> SeedUserType()
+        //{
+        //    return new List<UserType>()
+        //    {
+        //    new UserType(){ Name = "SystemAdmin"},
+        //    new UserType(){ Name = "ClincAdmin"},
+        //    new UserType(){ Name = "ClincDoctor"},
+        //    new UserType(){ Name = "ClincReceptionis"},
+        //    new UserType(){ Name = "User"},
+        //    new UserType(){ Name = "SystemUser"}
+        //    };
+        //}
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Base.DAL.Models.BaseModels;
 using Base.DAL.Models.SystemModels;
+using Base.Shared.Responses;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -79,7 +80,7 @@ namespace Base.DAL.Contexts
         #region DBSets
         public DbSet<UserProfile> UserProfiles { get; set; }
         public DbSet<MedicalSpecialty> MedicalSpecialties { get; set; }
-        public DbSet<UserType> UserTypes { get; set; }
+        //public DbSet<UserType> UserTypes { get; set; }
         public DbSet<ClincAdminProfile> ClincAdminProfiles { get; set; }
         public DbSet<ClincDoctorProfile> ClincDoctorProfiles { get; set; }
         public DbSet<ClincReceptionistProfile> ClincReceptionistProfiles { get; set; }
@@ -89,6 +90,7 @@ namespace Base.DAL.Contexts
         public DbSet<Appointment> Appointment { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<OtpEntry> OtpEntries { get; set; }
+        public DbSet<BlacklistedToken> BlacklistedTokens { get; set; }
         #endregion
 
     }

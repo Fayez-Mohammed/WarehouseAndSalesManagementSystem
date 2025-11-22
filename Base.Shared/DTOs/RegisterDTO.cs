@@ -25,4 +25,12 @@ namespace Base.Shared.DTOs
         [Phone]
         public string? PhoneNumber { get; set; }
     }
+    public enum UserTypes
+    {
+        ClinicDoctor,
+        ClinicReceptionist,
+        ClinicAdmin,
+        SystemAdmin,
+        User
+    }
 }

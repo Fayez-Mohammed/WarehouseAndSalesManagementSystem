@@ -1,4 +1,5 @@
 ﻿using Base.DAL.Models.SystemModels;
+using Base.Shared.DTOs;
 using Microsoft.AspNetCore.Identity;
 using System;
 using System.Collections.Generic;
@@ -11,7 +12,8 @@ namespace Base.DAL.Models.BaseModels
     public class ApplicationUser : IdentityUser
     {
         public string FullName { get; set; }
-        public string UserType { get; set; }
+        //public string UserType { get; set; }
+        public UserTypes Type { get; set; }
         public bool IsActive { get; set; } = true;
         public string? ImagePath { get; set; }
         public virtual UserProfile? Profile { get; set; }

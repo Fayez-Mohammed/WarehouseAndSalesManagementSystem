@@ -84,14 +84,13 @@ namespace Base.DAL.Migrations
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
-
-                    b.Property<string>("UserType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.HasKey("Id");
 
@@ -601,7 +600,7 @@ namespace Base.DAL.Migrations
                     b.ToTable("UserProfiles");
                 });
 
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.UserType", b =>
+            modelBuilder.Entity("Base.Shared.Responses.BlacklistedToken", b =>
                 {
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(450)");
@@ -615,17 +614,19 @@ namespace Base.DAL.Migrations
                     b.Property<DateTime>("DateOfUpdate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Name")
+                    b.Property<DateTime>("ExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Token")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("UpdatedById")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserTypes");
+                    b.ToTable("BlacklistedTokens");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>

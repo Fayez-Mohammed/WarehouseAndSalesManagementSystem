@@ -13,4 +13,8 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.21" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Base.Shared\Base.Shared.csproj" />
+  </ItemGroup>
+
 </Project>

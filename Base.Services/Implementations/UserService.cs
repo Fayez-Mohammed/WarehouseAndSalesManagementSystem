@@ -3,9 +3,11 @@ using Base.DAL.Models.SystemModels;
 using Base.Repo.Interfaces;
 using Base.Services.Interfaces;
 using Base.Shared.Responses;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -17,12 +19,14 @@ namespace Base.Services.Implementations
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public UserService(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IUnitOfWork unitOfWork)
+        public UserService(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IUnitOfWork unitOfWork,IHttpContextAccessor httpContextAccessor)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _unitOfWork = unitOfWork;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<ApplicationUser> GetByEmailAsync(string email)
@@ -83,6 +87,41 @@ namespace Base.Services.Implementations
 
         public async Task<IdentityResult> ChangePasswordAsync(ApplicationUser user, string currentPassword, string newPassword)
         => await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
-            
+
+
+        public async Task AddAccessTokenToBlackListFromHeaderAsync()
+        {// 1️⃣ قراءة الـ Authorization header
+            var accessToken = _httpContextAccessor.HttpContext?.Request.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+            if (string.IsNullOrEmpty(accessToken))
+                return; // مفيش توكن
+
+            // 2️⃣ استخراج تاريخ انتهاء الصلاحية من الـ JWT
+            var handler = new JwtSecurityTokenHandler();
+            JwtSecurityToken jwtToken;
+            try
+            {
+                jwtToken = handler.ReadJwtToken(accessToken);
+            }
+            catch
+            {
+                // توكن غير صالح، نقدر نعمل لوج أو نرجع
+                return;
+            }
+
+            var expiryDate = jwtToken.ValidTo;
+
+            // 3️⃣ إضافة الـ Access Token للـ Blacklist
+            var repo = _unitOfWork.Repository<BlacklistedToken>();
+            var blacklistedToken = new BlacklistedToken
+            {
+                Token = accessToken,
+                ExpiryDate = expiryDate
+            };
+
+            await repo.AddAsync(blacklistedToken);
+            await _unitOfWork.CompleteAsync();
+        }
+
+
     }
 }

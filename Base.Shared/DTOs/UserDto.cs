@@ -15,7 +15,8 @@ namespace Base.Shared.DTOs
         public string UserName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string? PhoneNumber { get; set; } = string.Empty;
-        public string UserType { get; set; } = string.Empty; // Admin, Farmer, Technician, etc.
+        //public string UserType { get; set; } = string.Empty; // Admin, Farmer, Technician, etc.
+        public UserTypes UserType { get; set; }
         public bool IsActive { get; set; }
         public string? ImagePath { get; set; }
         public DateTime DateOfCreation { get; set; }
@@ -39,7 +40,7 @@ namespace Base.Shared.DTOs
         public required string Email { get; set; } = string.Empty;
         [Required]
         public required string Password { get; set; } = string.Empty;
-        public string UserType { get; set; } = "SystemUser"; // default
+        public UserTypes UserType { get; set; } = UserTypes.SystemAdmin; // default
         public string? PhoneNumber { get; set; }
     }
 
@@ -47,7 +48,7 @@ namespace Base.Shared.DTOs
     public class UpdateUserRequest
     {
         public string? FullName { get; set; }
-        public string? UserType { get; set; }
+        public UserTypes? UserType { get; set; }
         public bool? IsActive { get; set; }
         public string? ImagePath { get; set; }
     }

@@ -49,6 +49,14 @@ namespace Base.Repo.Implementations
             _dbSet.Remove(entity);
             return Task.CompletedTask;
         }
+        public async Task RemoveRangeAsync(IEnumerable<T> entities)
+        {
+            if (entities == null || !entities.Any())
+                return;
+
+             _dbSet.RemoveRange(entities);
+             await Task.CompletedTask;
+        }
 
         // ---------------------- Read Operations ----------------------
 

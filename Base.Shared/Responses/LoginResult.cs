@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Base.Shared.DTOs;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -35,7 +36,7 @@ namespace Base.Shared.Responses
         public string Id { get; set; }
         public string UserName { get; set; }
         public string Email { get; set; }
-        public string UserType { get; set; }
+        public UserTypes UserType { get; set; }
         public IEnumerable<string> Roles { get; set; }
     }
 }

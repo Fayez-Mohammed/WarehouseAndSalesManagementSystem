@@ -2,8 +2,8 @@
 
 namespace Base.DAL.Models.SystemModels
 {
-    public class UserType : BaseEntity
-    {
-        public string Name { get; set; }
-    }
+    //public class UserType : BaseEntity
+    //{
+    //    public string Name { get; set; }
+    //}
 }

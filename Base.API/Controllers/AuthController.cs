@@ -255,16 +255,14 @@ namespace Base.API.Controllers
         [HttpPost("logout")]
         public async Task<IActionResult> Logout()
         {
-            var userId = User.FindFirst("id")?.Value;
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId)) return Unauthorized(new ApiResponse { Success = false, Message = "Unauthorized access.", ErrorCode = "UNAUTHORIZED" });
 
             var result = await _authService.LogoutAsync(userId);
-
             if (!result.Success)
             {
                 return Unauthorized(result); // Or BadRequest if appropriate, but 401 fits for auth issues
             }
-
             return Ok(result);
         }
 

@@ -2,6 +2,7 @@
 using Base.DAL.Models.BaseModels;
 using Base.Repo.Interfaces;
 using Base.Services.Interfaces;
+using Base.Shared.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
@@ -46,35 +47,44 @@ namespace Base.API.Authorization
                 context.Fail();
                 return;
             }
+            var userType = user.Type;
+
+            var clinicId = userType switch
+            {
+                UserTypes.ClinicDoctor => user.ClincDoctorProfile?.ClincId,
+                UserTypes.ClinicReceptionist => user.ClincReceptionistProfile?.ClincId,
+                UserTypes.ClinicAdmin => user.ClincAdminProfile?.ClincId,
+                _ => null
+            };
 
             // 2️⃣ تحقق من نوع المستخدم و الـ Clinic
-            if (Enum.TryParse<AvailableUserTypesForCreateUsers>(user.UserType, true, out var searchTypeEnum))
+            //if (Enum.TryParse<UserTypes>(user.Type, true, out var searchTypeEnum))
+            //{
+            //    var clinicId = searchTypeEnum switch
+            //    {
+            //        UserTypes.ClinicDoctor => user.ClincDoctorProfile?.ClincId,
+            //        UserTypes.ClinicReceptionist => user.ClincReceptionistProfile?.ClincId,
+            //        UserTypes.ClinicAdmin => user.ClincAdminProfile?.ClincId,
+            //        _ => null
+            //    };
+
+            if (string.IsNullOrEmpty(clinicId))
             {
-                var clinicId = searchTypeEnum switch
-                {
-                    AvailableUserTypesForCreateUsers.ClinicDoctor => user.ClincDoctorProfile?.ClincId,
-                    AvailableUserTypesForCreateUsers.ClinicReceptionist => user.ClincReceptionistProfile?.ClincId,
-                    AvailableUserTypesForCreateUsers.ClinicAdmin => user.ClincAdminProfile?.ClincId,
-                    _ => null
-                };
-
-                if (string.IsNullOrEmpty(clinicId))
-                {
-                    context.Fail();
-                    return;
-                }
-
-                var clinic = await _clinicServices.GetClinicAsync(c => c.Id == clinicId && c.Status == ClinicStatus.active.ToString(),true);
-                if (clinic == null)
-                {
-                    // نضع علامة في HttpContext على سبب عدم النشاط
-                    var httpContext = context.Resource as DefaultHttpContext;
-                    httpContext?.Items.Add("UserIsInactive", true);
-
-                    context.Fail();
-                    return;
-                }
+                context.Fail();
+                return;
             }
+
+            var clinic = await _clinicServices.GetClinicAsync(c => c.Id == clinicId && c.Status == ClinicStatus.active.ToString(), true);
+            if (clinic == null)
+            {
+                // نضع علامة في HttpContext على سبب عدم النشاط
+                var httpContext = context.Resource as DefaultHttpContext;
+                httpContext?.Items.Add("UserIsInactive", true);
+
+                context.Fail();
+                return;
+            }
+            //}
 
             // لو كل شيء تمام
             context.Succeed(requirement);

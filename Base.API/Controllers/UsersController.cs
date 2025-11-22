@@ -24,7 +24,7 @@ namespace Base.API.Controllers
         [HttpGet("list")]
         public async Task<ActionResult<UserListDto>> GetAll(
             [FromQuery] string? search,
-            [FromQuery] string? userType,
+            [FromQuery] UserTypes? userType,
             [FromQuery] bool? isActive,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)

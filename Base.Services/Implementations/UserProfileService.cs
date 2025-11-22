@@ -53,8 +53,8 @@ namespace Base.Services.Implementations
             if (!string.IsNullOrEmpty(request.FullName))
                 user.FullName = request.FullName;
 
-            if (!string.IsNullOrEmpty(request.UserType))
-                user.UserType = request.UserType;
+            if (request.UserType.HasValue)
+                user.Type = request.UserType ?? user.Type;
 
             if (request.IsActive.HasValue)
                 user.IsActive = request.IsActive.Value;
@@ -95,15 +95,15 @@ namespace Base.Services.Implementations
             var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
             return result.Succeeded;
         }
-        public async Task<UserListDto> GetAllAsync(string? search, string? userType, bool? isActive, int page, int pageSize)
+        public async Task<UserListDto> GetAllAsync(string? search, UserTypes? userType, bool? isActive, int page, int pageSize)
         {
             var query = _userManager.Users.AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
                 query = query.Where(u => u.FullName.Contains(search) || u.Email.Contains(search));
 
-            if (!string.IsNullOrWhiteSpace(userType))
-                query = query.Where(u => u.UserType == userType);
+            if (userType.HasValue)
+                query = query.Where(u => u.Type == userType.Value);
 
             if (isActive.HasValue)
                 query = query.Where(u => u.IsActive == isActive.Value);
