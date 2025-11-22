@@ -31,6 +31,7 @@ namespace Base.API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly IUserProfileService _userProfile;
         private readonly ILogger<AuthController> _logger;
 
         public AuthController(IAuthService authService, ILogger<AuthController> logger)
@@ -732,5 +733,25 @@ namespace Base.API.Controllers
                 : Unauthorized(result); // 401 دائمًا لأي فشل في الـ refresh
         }
         #endregion
-    } 
+
+        #region me
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<IActionResult> GetMyData()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                  ?? User.FindFirstValue("sub");
+
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(ApiResponse.Fail("Invalid or missing authentication token.", "INVALID_TOKEN"));
+
+            var profile = await _userProfile.GetByIdAsync(userId);
+
+            if (profile is null)
+                return NotFound(ApiResponse.NotFound("User profile not found."));
+
+            return Ok(ApiResponse.Ok(data: profile));
+        }
+        #endregion
+    }
 }

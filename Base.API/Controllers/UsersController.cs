@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Base.API.Controllers
 {
+    [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "SystemAdmin")]
     [Authorize(Policy = "ActiveUserOnly")]
     [Route("api/users")]
