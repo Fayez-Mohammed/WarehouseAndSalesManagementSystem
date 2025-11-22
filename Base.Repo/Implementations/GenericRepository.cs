@@ -1,5 +1,4 @@
-﻿using Base.DAL.Models;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Base.Repo.Interfaces;
 using Base.Repo.Specifications;
 using System;
@@ -8,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Base.DAL.Contexts;
+using Base.DAL.Models.BaseModels;
 
 namespace Base.Repo.Implementations
 {

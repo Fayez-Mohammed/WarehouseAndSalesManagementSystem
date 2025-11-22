@@ -1,10 +1,12 @@
 ﻿using Azure.Core;
 using Base.API.DTOs;
-using Base.DAL.Models;
+using Base.DAL.Models.BaseModels;
+using Base.DAL.Models.SystemModels;
 using Base.Repo.Interfaces;
 using Base.Services.Implementations;
 using Base.Services.Interfaces;
 using Base.Shared.DTOs;
+using Base.Shared.Responses.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;

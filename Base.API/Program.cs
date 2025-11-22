@@ -2,10 +2,11 @@
 using Base.API.MiddleWare;
 using Base.API.Services;
 using Base.DAL.Contexts;
-using Base.DAL.Models;
+using Base.DAL.Models.BaseModels;
 using Base.DAL.Seeding;
-using Base.Services.Helpers;
+using Base.Services.HangFireJobs;
 using Base.Services.Implementations;
+using Base.Shared.Responses.Exceptions;
 using Hangfire;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +29,7 @@ internal class Program
 
         // 💡 إضافة خدمات التحكم في الوصول عبر الأصول (CORS)
         // 💡 إضافة خدمات الهوية
-        builder.Services.AddApplicationservices(builder.Configuration);
+        builder.Services.AddApplicationServices(builder.Configuration);
 
 
         var app = builder.Build();

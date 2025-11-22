@@ -1,4 +1,4 @@
-﻿using Base.DAL.Models;
+﻿using Base.DAL.Models.BaseModels;
 using Base.Repo.Specifications;
 using Microsoft.EntityFrameworkCore.Query;
 using System;

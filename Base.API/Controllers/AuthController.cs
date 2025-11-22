@@ -1,7 +1,10 @@
-﻿using Base.API.DTOs;
+﻿using Azure.Core;
+using Base.API.DTOs;
 using Base.Services.Implementations;
 using Base.Services.Interfaces;
 using Base.Shared.DTOs;
+using Base.Shared.Responses;
+using Base.Shared.Responses.Exceptions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Facebook;
@@ -10,10 +13,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
@@ -21,9 +26,8 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Base.API.Controllers
 {
-
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/Auth")]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
@@ -35,340 +39,535 @@ namespace Base.API.Controllers
             _logger = logger;
         }
 
+        #region Login
         /// <summary>
-        /// Logins the specified model.
+        /// Authenticates a user and generates authentication tokens if successful.
         /// </summary>
-        /// <param name="model">The model.</param>
-        /// <returns></returns>
-        /// <exception cref="Base.Services.Implementations.BadRequestException">
-        /// An unexpected error occurred during the final login step.
-        /// or
-        /// An unexpected internal error occurred during login.
-        /// </exception>
+        /// <remarks>
+        /// This endpoint handles user login attempts. It validates the provided credentials and returns appropriate responses based on the authentication outcome.
+        /// 
+        /// Possible scenarios:
+        /// - If the email is not confirmed, an OTP is sent for verification, and the response indicates that confirmation is required.
+        /// - If two-factor authentication (2FA) is enabled, an OTP is sent for login, and the response prompts for OTP verification.
+        /// - If credentials are invalid or the account is locked, an error message is returned.
+        /// - On successful login without additional verification, JWT and refresh tokens are provided along with user details.
+        /// 
+        /// The response body is always a <see cref="LoginResult"/> object containing success status, messages, error codes, and conditional sections (Auth, Verification, User).
+        /// 
+        /// Example Response (Full Success - 200):
+        /// {
+        ///   "Success": true,
+        ///   "Message": "Login successful.",
+        ///   "ErrorCode": null,
+        ///   "Auth": {
+        ///     "Token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        ///     "RefreshToken": "abc123-refresh",
+        ///     "TokenExpiry": "2025-11-19T14:00:00Z"
+        ///   },
+        ///   "Verification": {
+        ///     "RequiresOtpVerification": false,
+        ///     "EmailConfirmed": true
+        ///   },
+        ///   "User": {
+        ///     "Id": "user123",
+        ///     "UserName": "john_doe",
+        ///     "Email": "john@example.com",
+        ///     "UserType": "Admin",
+        ///     "Roles": ["Admin", "User"]
+        ///   }
+        /// }
+        /// 
+        /// Example Response (OTP Required - 202):
+        /// {
+        ///   "Success": true,
+        ///   "Message": "OTP sent for login.",
+        ///   "ErrorCode": null,
+        ///   "Auth": null,
+        ///   "Verification": {
+        ///     "RequiresOtpVerification": true,
+        ///     "EmailConfirmed": true,
+        ///     "Email": "john@example.com"
+        ///   },
+        ///   "User": null
+        /// }
+        /// 
+        /// Example Response (Invalid Credentials - 401):
+        /// {
+        ///   "Success": false,
+        ///   "Message": "Invalid credentials.",
+        ///   "ErrorCode": "INVALID_CREDENTIALS",
+        ///   "Auth": null,
+        ///   "Verification": null,
+        ///   "User": null
+        /// }
+        /// </remarks>
+        /// <param name="model">The login credentials including email and password.</param>
+        /// <response code="200">Full login success with tokens and user details. Returns <see cref="LoginResult"/>.</response>
+        /// <response code="202">Login requires further verification (e.g., OTP or email confirmation). Returns <see cref="LoginResult"/> with verification details.</response>
+        /// <response code="400">Invalid model state (e.g., missing or malformed input).</response>
+        /// <response code="401">Invalid credentials. Returns <see cref="LoginResult"/> with error details.</response>
+        /// <response code="403">Account locked. Returns <see cref="LoginResult"/> with error details.</response>
+        [ProducesResponseType(typeof(LoginResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(LoginResult), StatusCodes.Status202Accepted)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(LoginResult), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(LoginResult), StatusCodes.Status403Forbidden)]
         [HttpPost("login")]
-        //// 🟢 الحالة الناجحة (تم إصدار التوكن)
-        //[ProducesResponseType(typeof(LoginResult), StatusCodes.Status200OK)]
-        //// ⚠️ الحالات التي تتطلب إجراء إضافي (OTP أو تأكيد إيميل)
-        //[ProducesResponseType(typeof(LoginResult), StatusCodes.Status202Accepted)]
-        //// 🛑 بيانات اعتماد غير صالحة
-        //[ProducesResponseType(typeof(LoginResult), StatusCodes.Status401Unauthorized)]
-        //// 🚫 الحساب مقفل
-        //[ProducesResponseType(typeof(LoginResult), StatusCodes.Status403Forbidden)]
-        //// 💥 أخطاء داخلية (فشل إرسال OTP/توليد توكن)
-        //[ProducesResponseType(typeof(LoginResult), StatusCodes.Status500InternalServerError)]
-        //[ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)] // 👈 يحدد شكل الاستجابة
-        //[ProducesResponseType((int)HttpStatusCode.BadRequest)]
-        //[ProducesResponseType((int)HttpStatusCode.NotFound)]
-        //[ProducesResponseType((int)HttpStatusCode.Unauthorized)]
-        //[ProducesResponseType((int)HttpStatusCode.Forbidden)]
-        //[ProducesResponseType((int)HttpStatusCode.InternalServerError)]
         public async Task<IActionResult> Login([FromBody] LoginDTO model)
         {
-            // 1. Model State Validation 
-            if (!ModelState.IsValid)
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            var result = await _authService.LoginUserAsync(model);
+
+            if (!result.Success)
             {
-                var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-                throw new BadRequestException(errors);
+                return result.ErrorCode == "ACCOUNT_LOCKED" ? StatusCode(403, result) : Unauthorized(result);
             }
-            try
+
+            if (result.Verification?.RequiresOtpVerification == true || result.Verification?.EmailConfirmed == false)
             {
-                // 2. Delegate to Service Layer
-                var result = await _authService.LoginUserAsync(model);
-
-                // 3. Translate Result to HTTP Response
-
-                if (!result.Success)
-                {
-                    // حالة الفشل (بيانات خاطئة، إيميل غير مؤكد، حساب مقفل)
-                    throw new UnauthorizedException(result.Message); // 401 Unauthorized
-                }
-                if (!result.EmailConfirmed)
-                {
-                    // نجاح جزئي: يتطلب التحقق من OTP
-                    return Ok(new { statusCode = 201, result });
-                }
-
-                if (result.RequiresOtpVerification)
-                {
-                    // نجاح جزئي: يتطلب التحقق من OTP
-                    return Ok(result);
-                }
-
-                // نجاح تام (تم إرجاع التوكن مباشرة لأن 2FA غير مفعل)
-                if (!string.IsNullOrEmpty(result.Token) && result.user is not null)
-                {
-                    return Ok(result);
-                }
-
-                // حالة غير متوقعة (فشل توليد التوكن داخل الخدمة)
-                throw new BadRequestException("An unexpected error occurred during the final login step.");
+                return Accepted(result); // 202 Accepted for partial success
             }
-            catch (BadRequestException ex)
-            {
-                // يلتقط الاستثناءات الناتجة عن أخطاء في البيانات (مثل أن النموذج يكون null)
-                throw new BadRequestException(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                // Log the exception
-                throw new InternalServerException("An unexpected internal error occurred during login.");
-            }
+
+            return Ok(result); // 200 OK for full success
         }
 
-        /*[HttpPost("refresh-token")]
-        public async Task<IActionResult> Refresh(RefreshTokenRequest model)
-        {
-            var result = await _authService.RefreshAsync(model);
-            return Ok(result);
-        }*/
-
         /// <summary>
-        /// Verifies the login.
+        /// Verifies the OTP for login and generates authentication tokens if successful.
         /// </summary>
-        /// <param name="model">The model.</param>
-        /// <returns></returns>
-        /// <exception cref="Base.Services.Implementations.BadRequestException">
-        /// An unexpected error occurred during OTP verification.
-        /// </exception>
-        /// 
         /// <remarks>
-        /// هذا الـ endpoint يعرض جميع المستخدمين الموجودين في قاعدة البيانات.
-        /// يمكن فلترة النتائج حسب الحاجة.
+        /// This endpoint handles OTP verification for the login process (e.g., for 2FA). It validates the provided OTP and returns appropriate responses based on the verification outcome.
+        /// 
+        /// Possible scenarios:
+        /// - If the OTP is invalid, an error message is returned.
+        /// - If the user is not found or the account is locked, an error message is returned.
+        /// - On successful verification, JWT and refresh tokens are provided along with user details.
+        /// 
+        /// The response body is always a <see cref="LoginResult"/> object containing success status, messages, error codes, and conditional sections (Auth, Verification, User).
+        /// 
+        /// Example Response (Success - 200):
+        /// {
+        ///   "Success": true,
+        ///   "Message": "Verification successful.",
+        ///   "ErrorCode": null,
+        ///   "Auth": {
+        ///     "Token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        ///     "RefreshToken": "abc123-refresh",
+        ///     "TokenExpiry": "2025-11-19T14:00:00Z"
+        ///   },
+        ///   "Verification": {
+        ///     "RequiresOtpVerification": false,
+        ///     "EmailConfirmed": true
+        ///   },
+        ///   "User": {
+        ///     "Id": "user123",
+        ///     "UserName": "john_doe",
+        ///     "Email": "john@example.com",
+        ///     "UserType": "Admin",
+        ///     "Roles": ["Admin", "User"]
+        ///   }
+        /// }
+        /// 
+        /// Example Response (Invalid OTP - 401):
+        /// {
+        ///   "Success": false,
+        ///   "Message": "Invalid OTP.",
+        ///   "ErrorCode": "INVALID_OTP",
+        ///   "Auth": null,
+        ///   "Verification": null,
+        ///   "User": null
+        /// }
+        /// 
+        /// Example Response (Account Locked - 403):
+        /// {
+        ///   "Success": false,
+        ///   "Message": "Account locked.",
+        ///   "ErrorCode": "ACCOUNT_LOCKED",
+        ///   "Auth": null,
+        ///   "Verification": null,
+        ///   "User": null
+        /// }
         /// </remarks>
-        /// <response code="200">Token and User info</response>
-        /// <response code="400">Invalid OTP. Please try again later.</response>
-        /// <response code="401">User authentication failed (User ID not found).</response>
-        /// <response code="403">Forbidden to access this end point</response>
-        /// <response code="404">Not Found Any User</response>
-        /// <response code="500">An unexpected error occurred during OTP verification.</response>
-        [HttpPost("verify-login")]
+        /// <param name="model">The OTP verification details including email and OTP.</param>
+        /// <response code="200">OTP verification successful with tokens and user details. Returns <see cref="LoginResult"/>.</response>
+        /// <response code="400">Invalid model state (e.g., missing or malformed input).</response>
+        /// <response code="401">Invalid OTP or user not found. Returns <see cref="LoginResult"/> with error details.</response>
+        /// <response code="403">Account locked. Returns <see cref="LoginResult"/> with error details.</response>
+        [ProducesResponseType(typeof(LoginResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(LoginResult), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(LoginResult), StatusCodes.Status403Forbidden)]
+        [HttpPost("login/verify")]
         public async Task<IActionResult> VerifyLogin([FromBody] VerifyOtpDTO model)
         {
-            // 1. Model State Validation
-            if (!ModelState.IsValid)
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            var result = await _authService.VerifyLoginAsync(model);
+
+            if (!result.Success)
             {
-                var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-                throw new BadRequestException(errors);
+                if (result.ErrorCode == "ACCOUNT_LOCKED") return StatusCode(403, result);
+                return Unauthorized(result);
             }
 
-            // 2. Delegate to Service Layer
-            try
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Logs out the authenticated user by revoking all refresh tokens.
+        /// </summary>
+        /// <remarks>
+        /// This endpoint requires authentication. It revokes all active refresh tokens for the user, effectively logging them out from all sessions.
+        /// 
+        /// Possible scenarios:
+        /// - If the user ID is invalid or not found, an error message is returned.
+        /// - On successful logout, a confirmation message is provided.
+        /// 
+        /// The response body is always an <see cref="ApiResponse"/> object containing success status, messages, and error codes if applicable.
+        /// 
+        /// Example Response (Success - 200):
+        /// {
+        ///   "Success": true,
+        ///   "Message": "Logged out successfully.",
+        ///   "ErrorCode": null
+        /// }
+        /// 
+        /// Example Response (Invalid User ID - 401):
+        /// {
+        ///   "Success": false,
+        ///   "Message": "Invalid user ID.",
+        ///   "ErrorCode": "INVALID_USER_ID"
+        /// }
+        /// 
+        /// Example Response (Unauthorized - 401):
+        /// {
+        ///   "Success": false,
+        ///   "Message": "Unauthorized access.",
+        ///   "ErrorCode": "UNAUTHORIZED"
+        /// }
+        /// </remarks>
+        /// <response code="200">Logout successful. Returns <see cref="ApiResponse"/> with confirmation.</response>
+        /// <response code="401">Unauthorized access, invalid user ID, or user not found. Returns <see cref="ApiResponse"/> with error details.</response>
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
+        [Authorize]
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            var userId = User.FindFirst("id")?.Value;
+            if (string.IsNullOrEmpty(userId)) return Unauthorized(new ApiResponse { Success = false, Message = "Unauthorized access.", ErrorCode = "UNAUTHORIZED" });
+
+            var result = await _authService.LogoutAsync(userId);
+
+            if (!result.Success)
             {
-                var result = await _authService.VerifyLoginAsync(model);
-
-                if (!result.Success)
-                {
-                    // فشل التحقق من OTP (401)
-                    throw new UnauthorizedException(result.Message);
-                }
-
-                // نجاح تام بعد التحقق من OTP
-                // بما أن result.Success = true, يجب أن يكون result.Data != null
-                return Ok(new { statusCode = 200, message = "Token and User info", result }); // 200 OK (Data contains Token and User info)
-
+                return Unauthorized(result); // Or BadRequest if appropriate, but 401 fits for auth issues
             }
-            catch (InvalidOperationException ex)
-            {
-                // إذا لم يتم العثور على المستخدم بعد التحقق من OTP (خطأ داخلي)
-                throw new NotFoundException(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
 
-                // لأي خطأ غير متوقع
-                throw new InternalServerException("An unexpected error occurred during OTP verification.");
-            }
+            return Ok(result);
         }
 
 
         /// <summary>
-        /// Registers a new user with the provided registration details.
+        /// Resends OTP for login purpose
         /// </summary>
-        /// <remarks>This method requires a valid <see cref="RegisterModel"/> object to be passed in the
-        /// request body.  Ensure that all required fields are correctly filled to avoid validation errors.</remarks>
-        /// <param name="model">The registration details of the user, including necessary information such as username, password, and email.</param>
-        /// <returns>An <see cref="IActionResult"/> indicating the result of the registration operation. Returns an HTTP 200 OK
-        /// response with a success message if registration is successful.</returns>
-        /// <exception cref="BadRequestException">Thrown if the provided registration details are invalid, containing a list of validation error messages.</exception>
+        /// <remarks>
+        /// This endpoint allows the user to request a new OTP during login if the previous one expired or was not received.
+        /// 
+        /// Privacy note: The same success response is returned whether the email exists or not to prevent enumeration attacks.
+        /// 
+        /// Sample request:
+        /// 
+        ///     POST /api/auth/login/resend-otp?email=user@example.com
+        /// 
+        /// </remarks>
+        /// <param name="email">User's email address</param>
+        /// <response code="202">OTP sent successfully (or would have been sent if email exists)</response>
+        /// <response code="400">Invalid email format</response>
+        /// <response code="429">Too many resend requests</response>
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status202Accepted)]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status429TooManyRequests)]
+        [HttpPost("login/resend-otp")]
+        public async Task<IActionResult> ResendLoginOtp([FromQuery] string email)
+        {
+            var result = await _authService.ResendOtpAsync(email,"login");
+
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
+        #endregion
+
+        #region Registration & Email
+        // <response code="429">Too many registration attempts from this IP</response>
+        //[ProducesResponseType(typeof(RegisterResult), StatusCodes.Status429TooManyRequests)]
+
+        /// <summary>
+        /// Register a new user account
+        /// </summary>
+        /// <remarks>
+        /// Creates a new user and sends a 6-digit verification code to the provided email.
+        /// 
+        /// Sample request:
+        /// 
+        ///     POST /api/auth/register
+        ///     {
+        ///       "email": "user@example.com",
+        ///       "password": "StrongP@ssw0rd",
+        ///       "fullName": "Ahmed Mohamed",
+        ///       "phoneNumber": "+201234567890"
+        ///     }
+        /// 
+        /// </remarks>
+        /// <response code="201">Account created successfully. Check your email for verification code.</response>
+        /// <response code="400">Validation errors or email already exists</response>
         [HttpPost("register")]
+        [ProducesResponseType(typeof(RegisterResult), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(RegisterResult), StatusCodes.Status400BadRequest)]
+        [Produces("application/json")]
         public async Task<IActionResult> Register([FromBody] RegisterDTO model)
         {
-            try
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var userAgent = Request.Headers["User-Agent"].ToString();
+
+            var result = await _authService.RegisterAsync(model, ip, userAgent);
+
+            if (!result.Success)
             {
-                if (!ModelState.IsValid)
+                return result.ErrorCode switch
                 {
-                    var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-                    throw new BadRequestException(errors);
-                }
-
-                await _authService.RegisterAsync(model);
-                return Ok(new { statusCode = 200, message = "The user has successfully registered. Please check your email to confirm your account." });
-
+                    "TOO_MANY_REQUESTS" => StatusCode(StatusCodes.Status429TooManyRequests, result),
+                    "EMAIL_EXISTS" => Conflict(result), // 409 أفضل من 400 لهذه الحالة
+                    _ => BadRequest(result)
+                };
             }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                throw new InternalServerException("An unexpected internal error occurred during Register.");
 
-            }
+            // 201 Created → لأننا أنشأنا مورد جديد (المستخدم)
+            return CreatedAtAction(nameof(Register), result);
         }
-
 
         /// <summary>
-        /// Sends a One-Time Password (OTP) to the specified email address.
+        /// Verify user email with 6-digit code
         /// </summary>
-        /// <remarks>This method initiates the process of sending an OTP to the user's email address. The
-        /// caller should ensure that the email address provided is valid and accessible by the user. Upon successful
-        /// execution, the user should proceed to verify the OTP using the appropriate endpoint.</remarks>
-        /// <param name="Email">The email address to which the OTP will be sent. Cannot be null, empty, or whitespace.</param>
-        /// <returns>An <see cref="IActionResult"/> indicating that the request has been accepted and the OTP has been sent.</returns>
-        /// <exception cref="BadRequestException">Thrown if <paramref name="Email"/> is null, empty, or consists only of whitespace.</exception>
-        [HttpPost("send-otp")]
-        public async Task<IActionResult> SendOtp([FromBody] string Email)
+        /// <remarks>
+        /// Completes the email verification process after registration.
+        /// 
+        /// Sample request:
+        /// 
+        ///     POST /api/auth/email/verify
+        ///     {
+        ///       "email": "user@example.com",
+        ///       "code": "483920"
+        ///     }
+        /// 
+        /// </remarks>
+        /// <response code="200">Email verified successfully</response>
+        /// <response code="400">Invalid, expired, or too many attempts</response>
+        /// <response code="409">Email already verified</response>
+        [HttpPost("email/verify")]
+        [ProducesResponseType(typeof(VerifyEmailResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(VerifyEmailResult), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(VerifyEmailResult), StatusCodes.Status409Conflict)]
+        [Produces("application/json")]
+        public async Task<IActionResult> VerifyEmail([FromBody] VerifyOtpDTO request)
         {
-            try
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var result = await _authService.VerifyEmailAsync(request);
+
+            if (!result.Success)
             {
-                if (string.IsNullOrWhiteSpace(Email))
-                    throw new BadRequestException("Email is Required.");
-
-                await _authService.SendOtpAsync(Email);
-                return Ok(new { statusCode = 200, message = "A One-Time (OTP) has been sent to your email." });
-
-
-            }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                throw new InternalServerException("An unexpected internal error occurred during Send Otp.");
-            }
-        }
-
-
-        /// <summary>Verifies the email.</summary>
-        /// <param name="model">The model.</param>
-        /// <returns>
-        /// </returns>
-        /// <exception cref="RepositoryProject.Services.BadRequestException"></exception>
-        [HttpPost("verify-email")]
-        public async Task<IActionResult> VerifyEmail([FromBody] VerifyOtpDTO model)
-        {
-            try
-            {
-                if (!ModelState.IsValid)
+                return result.ErrorCode switch
                 {
-                    var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-                    throw new BadRequestException(errors);
-                }
+                    "ALREADY_VERIFIED" => Conflict(result), // 409 Conflict
+                    "TOO_MANY_ATTEMPTS" => BadRequest(result),
+                    _ => BadRequest(result)
+                };
+            }
 
-                var ok = await _authService.VerifyEmailAsync(model);
-                if (!ok) throw new UnauthorizedException("Invalid or expired OTP code.");
-                return Ok(new { statusCode = 200, message = "Your email address has been successfully confirmed. You can now log in." });
-            }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                throw new InternalServerException("An unexpected internal error occurred during Verify Email.");
-            }
+            return Ok(result);
         }
 
         /// <summary>
-        /// Verifies the forget password.
+        /// Resend email verification OTP
         /// </summary>
-        /// <param name="model">The model.</param>
-        /// <returns></returns>
-        /// <exception cref="BadRequestException">errors</exception>
-        /// <exception cref="UnauthorizedException">Invalid or expired OTP code.</exception>
-        /// <exception cref="InternalServerException">An unexpected internal error occurred during Verify ForgetPassword.</exception>
-        [HttpPost("verify-forgetpassword")]
-        public async Task<IActionResult> VerifyForgetPassword([FromBody] VerifyForgetPasswordDTO model)
+        /// <remarks>
+        /// Allows the user to request a new email verification OTP if the previous one expired or was not received.
+        /// 
+        /// **Security Note**: The same success response is returned regardless of whether the email exists 
+        /// to prevent user enumeration attacks.
+        /// 
+        /// Sample request:
+        /// 
+        ///     POST /api/auth/email/resend-otp?email=user@example.com
+        /// 
+        /// </remarks>
+        /// <param name="email">The user's email address</param>
+        /// <response code="202">OTP sent (or would have been sent if the email is registered)</response>
+        /// <response code="400">Invalid email format</response>
+        /// <response code="429">Too many requests - rate limited</response>
+        [HttpPost("email/resend-otp")]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status202Accepted)]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status429TooManyRequests)]
+        [Produces("application/json")]
+        public async Task<IActionResult> ResendVerification([FromQuery] string email)
         {
-            try
+            var result = await _authService.ResendOtpAsync(email,"verifyemail");
+            if (!result.Success) return BadRequest(result);
+
+            return Ok(result);
+        }
+        #endregion
+
+        #region Password Recovery
+        /// <summary>
+        /// Initiate password reset by sending OTP to email
+        /// </summary>
+        /// <remarks>
+        /// Sends a 6-digit OTP to the user's email if the account exists.
+        /// 
+        /// **Important Security Note**: Always returns success to prevent user enumeration attacks.
+        /// 
+        /// Sample request:
+        /// 
+        ///     POST /api/auth/password/forgot
+        ///     { "email": "user@example.com" }
+        /// 
+        /// </remarks>
+        /// <response code="202">Reset code sent (or would be sent if email exists)</response>
+        /// <response code="400">Invalid email format</response>
+        /// <response code="429">Too many requests</response>
+        [ProducesResponseType(typeof(ForgotPasswordResult), StatusCodes.Status202Accepted)]
+        [ProducesResponseType(typeof(ForgotPasswordResult), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ForgotPasswordResult), StatusCodes.Status429TooManyRequests)]
+        [HttpPost("password/forgot")]
+        public async Task<IActionResult> ForgotPassword([FromQuery] string email)
+        {
+            var result = await _authService.ForgotPasswordAsync(email);
+
+            if (!result.Success)
             {
-                if (!ModelState.IsValid)
+                return result.ErrorCode switch
                 {
-                    var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-                    throw new BadRequestException(errors);
-                }
+                    "RESEND_COOLDOWN" or "TOO_MANY_RESENDS" =>
+                        StatusCode(StatusCodes.Status429TooManyRequests, result),
+                    _ => BadRequest(result)
+                };
+            }
 
-                var result = await _authService.VerifyForgetPassword(model);
-                if (string.IsNullOrEmpty(result)) throw new UnauthorizedException("Invalid or expired OTP code.");
-                return Ok(new { Message = "Your Token.", Token = result });
-            }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                throw new InternalServerException("An unexpected internal error occurred during Verify ForgetPassword.");
-            }
+            // 202 Accepted = "تم قبول الطلب، لكن في خطوة إضافية مطلوبة (إدخال الـ OTP)"
+            return Accepted(result);
         }
 
-
         /// <summary>
-        /// Forgots the password.
+        /// Verify password reset OTP and issue a reset token
         /// </summary>
-        /// <param name="Email">The email.</param>
-        /// <returns></returns>
-        /// <exception cref="Base.Services.Implementations.BadRequestException">Invalid request data.</exception>
-        [HttpPost("forgot-password")]
-        public async Task<IActionResult> ForgotPassword([FromBody] string Email)
+        /// <remarks>
+        /// Verifies the 6-digit code sent to the user's email and returns a short-lived reset token 
+        /// that can be used to change the password.
+        /// 
+        /// Sample request:
+        /// 
+        ///     POST /api/auth/password/verifyotp
+        ///     {
+        ///       "email": "user@example.com",
+        ///       "otp": "283947"
+        ///     }
+        /// 
+        /// </remarks>
+        /// <response code="200">OTP verified successfully. Use ResetToken to change password.</response>
+        /// <response code="400">Invalid, expired, or blocked OTP</response>
+        [ProducesResponseType(typeof(VerifyResetOtpResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(VerifyResetOtpResult), StatusCodes.Status400BadRequest)]
+        [HttpPost("password/verifyotp")]
+        public async Task<IActionResult> VerifyResetOtp([FromBody] VerifyOtpDTO model)
         {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(Email))
-                    throw new BadRequestException("Invalid request data.");
+            if (!ModelState.IsValid)
+                return BadRequest(new VerifyResetOtpResult { Success = false, Message = "Invalid request format." });
+            var result = await _authService.VerifyOtpAndGenerateResetTokenAsync(model);
 
-                await _authService.SendOtpAsync(Email);
-                return Ok(new { statusCode = 200, message = "A One-Time (OTP) has been sent to your email." });
+            if (!result.Success)
+                return BadRequest(result);
 
-            }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                throw new InternalServerException("An unexpected internal error occurred during Forgot Password.");
-            }
+            // 200 OK لأن العملية اكتملت بنجاح (خلافاً للـ resend اللي بيبقى 202)
+            return Ok(result);
         }
 
-
         /// <summary>
-        /// Resets the password.
+        /// Reset user password using reset token
         /// </summary>
-        /// <param name="model">The model.</param>
-        /// <returns></returns>
-        /// <exception cref="Base.Services.Implementations.BadRequestException">
-        /// Reset Password failed.
-        /// </exception>
-        [HttpPost("reset-password")]
+        /// <remarks>
+        /// Final step in the password reset flow.
+        /// Requires the 6-digit code sent to email + the reset token from /password/verifyotp
+        /// 
+        /// Sample request:
+        /// 
+        ///     POST /api/auth/password/reset
+        ///     {
+        ///       "email": "user@example.com",
+        ///       "resetToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxx",
+        ///       "newPassword": "NewStrongP@ssw0rd123!"
+        ///     }
+        /// 
+        /// </remarks>
+        /// <response code="200">Password changed successfully</response>
+        /// <response code="400">Invalid code, expired link, or too many attempts</response>
+        [HttpPost("password/reset")]
+        [ProducesResponseType(typeof(ResetPasswordResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ResetPasswordResult), StatusCodes.Status400BadRequest)]
+        [Produces("application/json")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDTO model)
         {
-            try
-            {
-                if (!ModelState.IsValid)
-                {
-                    var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
-                    throw new BadRequestException(errors);
-                }
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
-                var ok = await _authService.ResetPassword(model);
-                if (!ok) throw new BadRequestException("Reset Password failed.");
+            var result = await _authService.ResetPasswordAsync(model);
+            if (!result.Success)
+                return BadRequest(result);
 
-                return Ok(new { statusCode = 200, message = "Password has been reset successfully." });
-            }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                throw new InternalServerException("An unexpected internal error occurred during Reset Password.");
-            }
+            return Ok(result);
         }
 
+        /// <summary>
+        /// Resend Password OTP
+        /// </summary>
+        /// <remarks>
+        /// Allows the user to request a new Password OTP if the previous one expired or was not received.
+        /// 
+        /// **Security Note**: The same success response is returned regardless of whether the email exists 
+        /// to prevent user enumeration attacks.
+        /// 
+        /// Sample request:
+        /// 
+        ///     POST /api/auth/password/resend-otp?email=user@example.com
+        /// 
+        /// </remarks>
+        /// <param name="email">The user's email address</param>
+        /// <response code="202">OTP sent (or would have been sent if the email is registered)</response>
+        /// <response code="400">Invalid email format</response>
+        /// <response code="429">Too many requests - rate limited</response>
+        [HttpPost("password/resend-otp")]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status202Accepted)]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status429TooManyRequests)]
+        [Produces("application/json")]
+        public async Task<IActionResult> ResendPasswordOtp([FromQuery] string email)
+        {
+            var result = await _authService.ResendOtpAsync(email, "reset");
+
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
 
         /// <summary>
         /// Changes the password.
@@ -380,197 +579,158 @@ namespace Base.API.Controllers
         /// or
         /// An unexpected error occurred.
         /// </exception>
-        [HttpPost("change-password")]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
+        [HttpPost("password/change")]
         [Authorize]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDTO model)
         {
-            // 1. Get UserId from the authenticated token claims
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!ModelState.IsValid)
+                return BadRequest(ApiResponse.Fail("Invalid request data.", "VALIDATION_ERROR"));
+
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                  ?? User.FindFirstValue("sub");
 
             if (string.IsNullOrEmpty(userId))
-            {
-                // This is a defense-in-depth check. If [Authorize] is used, 
-                // this usually means the token is invalid or corrupted.
-                throw new UnauthorizedException("Authentication failed: User ID claim missing or invalid.");
-            }
-            try
-            {
-                // 2. Delegate business logic to the service layer
-                await _authService.ChangePasswordAsync(userId, model);
-                // 3. Success response
-                return Ok(new { statusCode = 200, message = "Password changed successfully." });
-            }
-            // 4. Handle specific business exceptions from the service
-            catch (BadRequestException ex)
-            {
-                // Catches errors like "Current password is wrong" or "New password does not meet policy"
-                throw new InternalServerException(ex.Message);
-            }
-            catch (NotFoundException)
-            {
-                // Catches if the user ID from the token somehow doesn't exist in the database
-                throw new NotFoundException("The current user could not be located.");
-            }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                // Catch any unexpected exceptions and log them internally
-                // _logger.LogError(ex, "Unexpected error changing password for user {UserId}", userId);
-                throw new InternalServerException("An unexpected error occurred during Change Password");
-            }
-        }
+                return Unauthorized(ApiResponse.Fail("Invalid or missing authentication token.", "INVALID_TOKEN"));
 
-        #region External login        
+            var result = await _authService.ChangePasswordAsync(userId, model);
 
-        #region Google
-        /// <summary>
-        /// Googles the login.
-        /// </summary>
-        /// <returns></returns>
-        [ApiExplorerSettings(IgnoreApi = true)]
-        [HttpGet("google-login")]
-        public IActionResult GoogleLogin()
-        {
-            // Protective: التأكد من أن RedirectUri يشير إلى مسار داخل تطبيقك
-            var redirectUrl = Url.Action(nameof(GoogleResponse), "Auth");
-            var properties = new AuthenticationProperties { RedirectUri = redirectUrl };
-            return Challenge(properties, GoogleDefaults.AuthenticationScheme);
-        }
-
-        /// <summary>
-        /// Googles the response.
-        /// </summary>
-        /// <returns></returns>
-        [ApiExplorerSettings(IgnoreApi = true)]
-
-        [HttpGet("google-response")]
-        public async Task<IActionResult> GoogleResponse()
-        {
-            // 1. التحقق من المصادقة الخارجية
-            var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
-            if (result?.Principal == null || !result.Succeeded)
-                throw new BadRequestException("External authentication failed.");
-
-            var email = result.Principal.FindFirst(ClaimTypes.Email)?.Value;
-            var fullName = result.Principal.FindFirst(ClaimTypes.Name)?.Value;
-
-            // 🟢 مهم: تسجيل خروج المستخدم من الكوكيز الخارجية بعد جلب البيانات
-            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
-
-            if (string.IsNullOrEmpty(email))
-                throw new NotFoundException("External provider did not return an email address.");
-
-            try
-            {
-                // 2. تفويض كل منطق العمل إلى طبقة الخدمة
-                var loginResponse = await _authService.HandleExternalLoginAsync(email, fullName);
-
-                // 3. إرجاع النتيجة (Token and User data)
-                return Ok(new { statusCode = 200, message = "Token and User data", loginResponse });
-            }
-            catch (BadRequestException ex)
-            {
-                // التقاط أخطاء مثل 'External provider did not return an email' إذا حدثت في الخدمة
-                throw new BadRequestException(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                // Log the error (ex) here
-                throw new InternalServerException("An unexpected error occurred during Google sign-in process.");
-            }
+            return result.Success
+                ? Ok(ApiResponse.Ok(result.Message))
+                : BadRequest(ApiResponse.Fail(result.Message, result.ErrorCode));
         }
         #endregion
 
-        #region Facebook        
+        #region 2FA
         /// <summary>
-        /// Facebooks the login.
+        /// used to initiate the 2FA enabling process
         /// </summary>
         /// <returns></returns>
-        [ApiExplorerSettings(IgnoreApi = true)]
-        [HttpGet("facebook-login")]
-        public IActionResult FacebookLogin()
+        [HttpPost("2fa/initiate")]
+        [Authorize]
+        public async Task<IActionResult> Initiate2Fa()
         {
-            // استخدام FacebookDefaults.AuthenticationScheme
-            var redirectUrl = Url.Action(nameof(FacebookResponse), "Auth");
-            var properties = new AuthenticationProperties { RedirectUri = redirectUrl };
-            return Challenge(properties, FacebookDefaults.AuthenticationScheme);
+            var Email =  User.FindFirstValue(ClaimTypes.Email);
+            if (string.IsNullOrEmpty(Email))
+                return Unauthorized(ApiResponse.Fail("Invalid token."));
+
+            var result = await _authService.InitiateEnable2FaAsync(Email);
+            return result.Success
+                ? Ok(result)
+                : BadRequest(result);
         }
+
         /// <summary>
-        /// Facebooks the response.
+        /// used to confirm enabling 2FA with the provided OTP
         /// </summary>
-        /// <returns></returns>
-        [ApiExplorerSettings(IgnoreApi = true)]
-        [HttpGet("facebook-response")]
-        public async Task<IActionResult> FacebookResponse()
+        [HttpPost("2fa/confirm")]
+        [Authorize]
+        public async Task<IActionResult> Confirm2Fa([FromQuery] string Otp)
         {
-            // 1. التحقق من المصادقة الخارجية
-            var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            if (string.IsNullOrEmpty(Otp))
+                return BadRequest(ApiResponse.Fail("Invalid request.", "VALIDATION_ERROR"));
 
-            if (result?.Principal == null || !result.Succeeded)
-                throw new BadRequestException("External authentication failed.");
+            var Email = User.FindFirstValue(ClaimTypes.Email);
+            if (string.IsNullOrEmpty(Email))
+                return Unauthorized(ApiResponse.Fail("Invalid token."));
 
-            var email = result.Principal.FindFirst(ClaimTypes.Email)?.Value;
-            var fullName = result.Principal.FindFirst(ClaimTypes.Name)?.Value;
+            var result = await _authService.ConfirmEnable2FaAsync(Email, Otp);
 
-            // 🟢 مهم: تسجيل خروج المستخدم من الكوكيز الخارجية بعد جلب البيانات
-            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+            return result.Success
+                ? Ok(result)
+                : BadRequest(result);
+        }
 
-            if (string.IsNullOrEmpty(email))
-                // تغيير الرسالة لتكون خاصة بالمنفذ الخارجي المستخدم حالياً
-                throw new NotFoundException("External provider (Facebook) did not return an email address.");
+        /// <summary>
+        /// used to disable 2FA for the user
+        /// </summary>
+        [HttpPost("2fa/disable")]
+        [Authorize]
+        public async Task<IActionResult> Disable2Fa([FromBody] Disable2FaDTO model)
+        {
+            if(!ModelState.IsValid)
+            return BadRequest(ApiResponse.Fail("Invalid request.", "VALIDATION_ERROR"));
 
-            try
-            {
-                // 2. تفويض كل منطق العمل إلى نفس دالة الخدمة المشتركة
-                var loginResponse = await _authService.HandleExternalLoginAsync(email, fullName);
+            var Email = User.FindFirstValue(ClaimTypes.Email);
+            if (string.IsNullOrEmpty(Email))
+                return Unauthorized(ApiResponse.Fail("Invalid token."));
 
-                // 3. إرجاع النتيجة (Token and User data)
-                return Ok(new { statusCode = 200, message = "Token and User data", loginResponse });
+            var result = await _authService.Disable2FaAsync(Email, model.CurrentPassword);
 
-            }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                // Log the error (ex) here
-                throw new InternalServerException("An unexpected error occurred during Facebook sign-in process.");
-            }
+            return result.Success
+                ? Ok(result)
+                : BadRequest(result);
+        }
+
+        /// <summary>
+        /// Resend Two Factor Authentication OTP
+        /// </summary>
+        /// <remarks>
+        /// Allows the user to request a new Two Factor Authentication OTP if the previous one expired or was not received.
+        /// 
+        /// **Security Note**: The same success response is returned regardless of whether the email exists 
+        /// to prevent user enumeration attacks.
+        /// 
+        /// Sample request:
+        /// 
+        ///     POST /api/auth/2fa/resend-otp
+        /// 
+        /// </remarks>
+        /// <response code="202">OTP sent (or would have been sent if the email is registered)</response>
+        /// <response code="400">Invalid email format</response>
+        /// <response code="429">Too many requests - rate limited</response>
+        [HttpPost("2fa/resend-otp")]
+        [Authorize]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status202Accepted)]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ResendOtpResult), StatusCodes.Status429TooManyRequests)]
+        [Produces("application/json")]
+        public async Task<IActionResult> Resend2FaOtp()
+        {
+            var Email = User.FindFirstValue(ClaimTypes.Email);
+            var result = await _authService.ResendOtpAsync(Email, "2fa");
+
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
         }
         #endregion
 
-        #endregion
-
-
-        [HttpPost("refresh")]
-        public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest model)
+        #region refreshtoken
+        /// <summary>
+        /// Refresh JWT token using a valid refresh token
+        /// </summary>
+        /// <remarks>
+        /// Implements secure refresh token rotation with reuse detection and automatic revocation on compromise.
+        /// 
+        /// Sample request:
+        /// 
+        ///     POST /api/auth/token/refresh
+        ///     {
+        ///       "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxx"
+        ///     }
+        /// 
+        /// </remarks>
+        /// <response code="200">New access & refresh tokens issued</response>
+        /// <response code="401">Invalid, expired, or revoked refresh token</response>
+        [HttpPost("token/refresh")]
+        [ProducesResponseType(typeof(RefreshTokenResult), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(RefreshTokenResult), StatusCodes.Status401Unauthorized)]
+        [Produces("application/json")]
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
         {
-            // read ip & userAgent if not supplied
-            var ip = model.Ip ?? HttpContext.Connection.RemoteIpAddress?.ToString();
-            var ua = model.UserAgent ?? Request.Headers["User-Agent"].ToString();
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
-            try
-            {
-                var response = await _authService.RefreshAsync(model with { Ip = ip, UserAgent = ua });
-                // Option: set refresh token as an HttpOnly Secure cookie
-                var cookieOptions = new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.Strict,
-                    Expires = DateTime.UtcNow.AddDays(int.Parse(/* from config */ "30"))
-                };
-                Response.Cookies.Append("refreshToken", response.RefreshToken, cookieOptions);
+            var result = await _authService.RefreshTokenAsync(request);
 
-                return Ok(response);
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return Unauthorized();
-            }
+            return result.Success
+                ? Ok(result)
+                : Unauthorized(result); // 401 دائمًا لأي فشل في الـ refresh
         }
-    }
+        #endregion
+    } 
 }

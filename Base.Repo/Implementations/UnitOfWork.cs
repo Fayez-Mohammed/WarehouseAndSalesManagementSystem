@@ -1,7 +1,7 @@
-﻿using Base.DAL.Models;
-using Microsoft.EntityFrameworkCore.Storage;
+﻿using Microsoft.EntityFrameworkCore.Storage;
 using Base.Repo.Interfaces;
 using Base.DAL.Contexts;
+using Base.DAL.Models.BaseModels;
 // ... باقي الـ usings
 
 namespace Base.Repo.Implementations

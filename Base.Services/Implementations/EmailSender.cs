@@ -10,13 +10,13 @@ namespace Base.Services.Implementations
     /// <summary>
     /// خدمة آمنة ووقائية لإرسال رسائل البريد الإلكتروني عبر SMTP.
     /// </summary>
-    public class EmailService : IEmailSender
+    public class EmailSender : IEmailSender
     {
         private readonly IConfiguration _config;
-        private readonly ILogger<EmailService> _logger;
+        private readonly ILogger<EmailSender> _logger;
 
         // حقن IConfiguration و ILogger في البناء
-        public EmailService(IConfiguration config, ILogger<EmailService> logger)
+        public EmailSender(IConfiguration config, ILogger<EmailSender> logger)
         {
             _config = config;
             _logger = logger;

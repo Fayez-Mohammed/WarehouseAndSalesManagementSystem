@@ -1,6 +1,9 @@
-﻿using Base.DAL.Models;
+﻿using Base.DAL.Models.BaseModels;
+using Base.DAL.Models.SystemModels;
 using Base.Repo.Interfaces;
+using Base.Services.Helpers;
 using Base.Services.Interfaces;
+using Base.Shared.DTOs;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using RepositoryProject.Specifications;
@@ -23,57 +26,108 @@ namespace Base.Services.Implementations
             _userManager = userManager;
         }
 
-        // 💡 الدالة التي تنفذ حذف البروفايل والمستخدم معًا
-        public async Task<bool> DeleteProfileAndUserAsync(string userID)
-        {            
-            var profileRepository = _unitOfWork.Repository<UserProfile>();
+        public async Task<UserDto?> GetByIdAsync(string id)
+        {
+            var user = await _userManager.Users
+                //.Include(u => u.Farms)
+                .FirstOrDefaultAsync(u => u.Id == id);
 
-            // 1️⃣ جلب البروفايل بدون تتبع (عشان ما يحصلش conflict)
-            var spec = new BaseSpecification<UserProfile>(e => e.UserId.ToLower() == userID.ToLower());
-            var profile = await profileRepository.GetEntityWithSpecAsync(spec);
-            if (profile == null)
-                return false;
-
-            // 2️⃣ حذف البروفايل
-            await profileRepository.DeleteAsync(profile);
-            var saved = await _unitOfWork.CompleteAsync() > 0;
-
-            //    _logger.LogWarning("لم يتم حفظ التغييرات بعد حذف البروفايل {ProfileId}", profileId);
-
-            if (saved)
-            {
-
-                IdentityResult userDeleteResult = IdentityResult.Success;
-
-                // 3️⃣ حذف المستخدم المرتبط
-                if (!string.IsNullOrEmpty(profile.UserId))
-                {
-                    var userToDelete = await _userManager.FindByIdAsync(profile.UserId);
-                    if (userToDelete != null)
-                    {
-                        try
-                        {
-                            userDeleteResult = await _userManager.DeleteAsync(userToDelete);
-                        }
-                        catch (DbUpdateConcurrencyException ex)
-                        {
-                            // 🛑 ده هو السيناريو اللي بيظهر فيه الخطأ Optimistic concurrency failure
-                            //_logger.LogError(ex, "فشل حذف المستخدم {UserId} بسبب تعارض في البيانات", profile.UserId);
-                            return false;
-                        }
-
-                        if (!userDeleteResult.Succeeded)
-                        {
-                            //_logger.LogWarning("فشل حذف المستخدم المرتبط بالبروفايل {ProfileId}: {Errors}",
-                            //    profileId,
-                            //    string.Join(", ", userDeleteResult.Errors.Select(e => e.Description)));
-                            return false;
-                        }
-                        return true;
-                    }
-                }
-            }
-            return false;
+            return user?.ToUserDto();
         }
+        public async Task<UserDto> CreateAsync(CreateUserRequest request)
+        {
+            var user = request.ToApplicationUser();
+            user.IsActive = true;
+            var result = await _userManager.CreateAsync(user, request.Password);
+
+            if (!result.Succeeded)
+                throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
+
+            return user.ToUserDto();
+        }
+        public async Task<UserDto?> UpdateAsync(string id, UpdateUserRequest request)
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null) return null;
+
+            if (!string.IsNullOrEmpty(request.FullName))
+                user.FullName = request.FullName;
+
+            if (!string.IsNullOrEmpty(request.UserType))
+                user.UserType = request.UserType;
+
+            if (request.IsActive.HasValue)
+                user.IsActive = request.IsActive.Value;
+
+            if (!string.IsNullOrEmpty(request.ImagePath))
+                user.ImagePath = request.ImagePath;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+                throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
+
+            return user.ToUserDto();
+        }
+        public async Task<bool> ToggleActiveAsync(string id)
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null) return false;
+
+            user.IsActive = !user.IsActive;
+
+            var result = await _userManager.UpdateAsync(user);
+            return result.Succeeded;
+        }
+        public async Task<bool> DeleteAsync(string id)
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null) return false;
+
+            var result = await _userManager.DeleteAsync(user);
+            return result.Succeeded;
+        }
+        public async Task<bool> ChangePasswordAsync(string userId, string newPassword)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user is null) return false;
+
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+            return result.Succeeded;
+        }
+        public async Task<UserListDto> GetAllAsync(string? search, string? userType, bool? isActive, int page, int pageSize)
+        {
+            var query = _userManager.Users.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+                query = query.Where(u => u.FullName.Contains(search) || u.Email.Contains(search));
+
+            if (!string.IsNullOrWhiteSpace(userType))
+                query = query.Where(u => u.UserType == userType);
+
+            if (isActive.HasValue)
+                query = query.Where(u => u.IsActive == isActive.Value);
+
+            var total = await query.CountAsync();
+
+            //query.Include(u => u.Farms);
+
+            var users = await query
+                .OrderBy(u => u.FullName)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var userDtos = users.ToUserDtoSet();// _mapper.Map<List<UserDto>>(users);
+
+            return new UserListDto
+            {
+                Users = userDtos.ToList(),
+                TotalCount = total,
+                FilteredCount = userDtos.Count
+            };
+        }
+
     }
 }
+

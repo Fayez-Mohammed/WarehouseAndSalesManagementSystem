@@ -1,7 +1,8 @@
 ﻿using Base.API.DTOs;
-using Base.DAL.Models;
+using Base.DAL.Models.BaseModels;
 using Base.Services.Implementations;
 using Base.Shared.DTOs;
+using Base.Shared.Responses.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;

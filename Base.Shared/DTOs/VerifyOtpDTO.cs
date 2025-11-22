@@ -5,8 +5,12 @@ namespace Base.Shared.DTOs
     public class VerifyOtpDTO
     {
         [Required]
-        public required string Email { get; set; }
+        [EmailAddress]
+        public string Email { get; set; }
+
         [Required]
-        public required string Otp { get; set; }
+        [StringLength(6, MinimumLength = 6)] // Assuming OTP is 6 digits
+        [RegularExpression(@"^\d{6}$", ErrorMessage = "OTP must be 6 digits.")]
+        public string Otp { get; set; }
     }
 }

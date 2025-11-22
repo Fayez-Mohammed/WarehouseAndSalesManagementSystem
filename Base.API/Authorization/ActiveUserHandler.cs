@@ -1,5 +1,5 @@
 ﻿using Base.API.Controllers;
-using Base.DAL.Models;
+using Base.DAL.Models.BaseModels;
 using Base.Repo.Interfaces;
 using Base.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;

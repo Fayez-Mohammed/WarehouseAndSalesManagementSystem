@@ -7,15 +7,15 @@ namespace Base.Shared.DTOs
 {
     public class RegisterDTO
     {
-        [Required]
-        [EmailAddress]
+        [Required, EmailAddress]
         public required string Email { get; set; }
 
-        [Required]
-        [PasswordPropertyText]
+        [Required, MinLength(8)]
+        //[RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$",
+        //    ErrorMessage = "Password must contain at least 8 characters, one uppercase, one lowercase, one number and one special character.")]
         public required string Password { get; set; }
 
-        [Required]
+        [Required, MinLength(2)]
         public required string FullName { get; set; }
 
         //[Required]

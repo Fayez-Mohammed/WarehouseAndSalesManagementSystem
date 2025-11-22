@@ -1,5 +1,6 @@
 ﻿using Base.DAL.Contexts;
-using Base.DAL.Models;
+using Base.DAL.Models.BaseModels;
+using Base.DAL.Models.SystemModels;
 using Microsoft.AspNetCore.Identity;
 using System.Threading.Tasks;
 
@@ -123,7 +124,6 @@ namespace Base.DAL.Seeding
             }
         };
         }
-
         public static List<UserType> SeedUserType()
         {
             return new List<UserType>()
@@ -132,7 +132,8 @@ namespace Base.DAL.Seeding
             new UserType(){ Name = "ClincAdmin"},
             new UserType(){ Name = "ClincDoctor"},
             new UserType(){ Name = "ClincReceptionis"},
-            new UserType(){ Name = "User"}
+            new UserType(){ Name = "User"},
+            new UserType(){ Name = "SystemUser"}
             };
         }
     }

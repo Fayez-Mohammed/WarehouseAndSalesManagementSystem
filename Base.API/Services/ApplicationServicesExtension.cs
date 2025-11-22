@@ -2,10 +2,10 @@
 using Base.API.Filters;
 using Base.API.Helper;
 using Base.DAL.Contexts;
-using Base.DAL.Models;
+using Base.DAL.Models.BaseModels;
 using Base.Repo.Implementations;
 using Base.Repo.Interfaces;
-using Base.Services.Helpers;
+using Base.Services.HangFireJobs;
 using Base.Services.Implementations;
 using Base.Services.Interfaces;
 using Hangfire;
@@ -27,7 +27,7 @@ using System.Text.Json.Serialization;
 
 namespace Base.API.Services
 {
-    public static class ApplicationservicesExtension
+   /* public static class ApplicationservicesExtension
     {
         public static IServiceCollection AddApplicationservices(this IServiceCollection services, IConfiguration _configuration)
         {
@@ -80,15 +80,15 @@ namespace Base.API.Services
 
             // تسجيل خدمة الذاكرة المؤقتة (IMemoryCache) - ضروري لـ OtpService
             services.AddMemoryCache();
-
             services.AddScoped<IJwtService, JwtService>();
-            // تسجيل خدمة OTP
             services.AddScoped<IOtpService, OtpService>();
-            // ربط Repository بـ Dependency Injection
             services.AddScoped<IUserProfileService, UserProfileService>();
-            services.AddTransient<IEmailSender, EmailService>();
+            services.AddTransient<IEmailSender, EmailSender>();
+            services.AddTransient<IEmailService, EmailService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
+            services.AddScoped<IRefreshTokenService, RefreshTokenService>();
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IUserService, UserService>();
             services.AddScoped<IAuthorizationHandler, ActiveUserHandler>();
             services.AddScoped<IClinicServices, ClinicServices>();
             services.AddScoped<IUploadImageService, UploadImageService>();
@@ -186,7 +186,7 @@ namespace Base.API.Services
                 options.IncludeXmlComments(xmlPath);
                 // ✅ نربط كل أكشن بالـ response الفعلي بتاعه
                 options.OperationFilter<AuthorizeCheckOperationFilter>();
-                options.OperationFilter<SwaggerResponseOperationFilter>();
+                //options.OperationFilter<SwaggerResponseOperationFilter>();
             });
             services.AddHangfire(config =>
                                  config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -201,35 +201,6 @@ namespace Base.API.Services
                 options.AddPolicy("ActiveUserOnly", policy =>
                     policy.Requirements.Add(new ActiveUserRequirement()));
             });
-
-            //services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme,
-            //options =>
-            //        {options.Events = new JwtBearerEvents
-            //            {
-            //                OnChallenge = context =>
-            //                {
-            //                    // منع الـ Default 403 Response
-            //                    context.HandleResponse();
-            //                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            //                    context.Response.ContentType = "application/json";
-            //                    var result = JsonSerializer.Serialize(new
-            //                    {
-            //                        error = "Unauthorized or inactive account"
-            //                    });
-            //                    return context.Response.WriteAsync(result);
-            //                },
-            //                OnForbidden = context =>
-            //                {
-            //                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            //                    context.Response.ContentType = "application/json";
-            //                    var result = JsonSerializer.Serialize(new
-            //                    {
-            //                        error = "User account is inactive"
-            //                    });
-            //                    return context.Response.WriteAsync(result);
-            //                }
-            //            };
-            //        });
 
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
@@ -283,5 +254,5 @@ namespace Base.API.Services
             #endregion
             return services;
         }
-    }
+    }*/
 }

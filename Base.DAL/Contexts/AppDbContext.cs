@@ -1,4 +1,5 @@
-﻿using Base.DAL.Models;
+﻿using Base.DAL.Models.BaseModels;
+using Base.DAL.Models.SystemModels;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -22,26 +23,9 @@ namespace Base.DAL.Contexts
         {
             _httpContextAccessor = httpContextAccessor;
         }
-        public DbSet<UserProfile> UserProfiles { get; set; }
-        public DbSet<MedicalSpecialty> MedicalSpecialties { get; set; }
-        public DbSet<UserType> UserTypes { get; set; }
-        public DbSet<ClincAdminProfile> ClincAdminProfiles { get; set; }
-        public DbSet<ClincDoctorProfile> ClincDoctorProfiles { get; set; }
-        public DbSet<ClincReceptionistProfile> ClincReceptionistProfiles { get; set; }
-        public DbSet<Clinic> Clinics { get; set; }
-        public DbSet<ClinicSchedule> ClinicSchedule { get; set; }
-        public DbSet<AppointmentSlot> AppointmentSlot { get; set; }
-        public DbSet<Appointment> Appointment { get; set; }
-        public DbSet<RefreshToken> RefreshTokens { get; set; }
-
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
-
-            //builder.Entity<ClincAdminProfile>().UseTpcMappingStrategy();
-            //builder.Entity<ClincDoctorProfile>().UseTpcMappingStrategy();
-            //builder.Entity<ClincReceptionistProfile>().UseTpcMappingStrategy();
-
             builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
         }
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -91,6 +75,21 @@ namespace Base.DAL.Contexts
 
             return base.SaveChangesAsync(cancellationToken);
         }
-    
+
+        #region DBSets
+        public DbSet<UserProfile> UserProfiles { get; set; }
+        public DbSet<MedicalSpecialty> MedicalSpecialties { get; set; }
+        public DbSet<UserType> UserTypes { get; set; }
+        public DbSet<ClincAdminProfile> ClincAdminProfiles { get; set; }
+        public DbSet<ClincDoctorProfile> ClincDoctorProfiles { get; set; }
+        public DbSet<ClincReceptionistProfile> ClincReceptionistProfiles { get; set; }
+        public DbSet<Clinic> Clinics { get; set; }
+        public DbSet<ClinicSchedule> ClinicSchedule { get; set; }
+        public DbSet<AppointmentSlot> AppointmentSlot { get; set; }
+        public DbSet<Appointment> Appointment { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<OtpEntry> OtpEntries { get; set; }
+        #endregion
+
     }
 }

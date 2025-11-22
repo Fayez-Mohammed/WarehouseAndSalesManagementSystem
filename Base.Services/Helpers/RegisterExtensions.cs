@@ -1,4 +1,5 @@
-﻿using Base.DAL.Models;
+﻿using Base.DAL.Models.BaseModels;
+using Base.DAL.Models.SystemModels;
 using Base.Shared.DTOs;
 using Microsoft.AspNetCore.Identity;
 
@@ -32,8 +33,8 @@ namespace Base.Services.Helpers
 
             return new UserProfile
             {
-                FullName = Dto.FullName,
-                PhoneNumber = Dto.PhoneNumber
+                //FullName = Dto.FullName,
+                //PhoneNumber = Dto.PhoneNumber
             };
         }
     }

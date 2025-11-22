@@ -1,9 +1,11 @@
 ﻿
 using Base.API.DTOs;
-using Base.DAL.Models;
+using Base.DAL.Models.BaseModels;
+using Base.DAL.Models.SystemModels;
 using Base.Repo.Interfaces;
 using Base.Services.Implementations;
 using Base.Services.Interfaces;
+using Base.Shared.Responses.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
@@ -28,7 +30,19 @@ namespace Base.API.Controllers
             _unitOfWork = unitOfWork;
             _userProfileService = userProfileService; 
         }
-
+        /// <summary>
+        /// Get All Users
+        /// </summary>
+        /// <remarks>
+        /// هذا الـ endpoint يعرض جميع المستخدمين الموجودين في قاعدة البيانات.
+        /// يمكن فلترة النتائج حسب الحاجة.
+        /// </remarks>
+        /// <returns>قائمة المستخدمين</returns>
+        /// <response code="200">All Users</response>
+        /// <response code="401">you are not authorized</response>
+        /// <response code="403">Forbidden to access this end point</response>
+        /// <response code="404">No users found in the system.</response>
+        /// <response code="500">Internal Server Error</response>
         [HttpGet("users")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetAllUsers()
@@ -114,8 +128,8 @@ namespace Base.API.Controllers
                     Profile = new
                     {
                         // استخدام Null-Conditional Operator (?.) لمعالجة حالة profile == null
-                        FullName = profile?.FullName,
-                        PhoneNumber = profile?.PhoneNumber,
+                        //FullName = profile?.FullName,
+                        //PhoneNumber = profile?.PhoneNumber,
                     }
                 };
                 return Ok(new ApiResponseDTO(200, "Current User", result));
@@ -135,7 +149,7 @@ namespace Base.API.Controllers
             if (string.IsNullOrWhiteSpace(userID))
                throw new BadRequestException("User ID is required.");
 
-            var success = await _userProfileService.DeleteProfileAndUserAsync(userID);
+            var success = await _userProfileService.DeleteAsync(userID);
 
             if (!success)
             {

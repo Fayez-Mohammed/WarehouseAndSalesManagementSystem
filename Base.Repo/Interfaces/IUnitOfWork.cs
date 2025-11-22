@@ -1,5 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore.Storage;
-using Base.DAL.Models;
+using Base.DAL.Models.BaseModels;
 
 namespace Base.Repo.Interfaces
 {

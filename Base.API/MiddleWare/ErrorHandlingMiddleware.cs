@@ -1,5 +1,6 @@
 ﻿using Base.API.DTOs;
 using Base.Services.Implementations;
+using Base.Shared.Responses.Exceptions;
 using System.Net;
 using System.Text.Json;
 

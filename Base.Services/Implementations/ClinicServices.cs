@@ -1,4 +1,5 @@
-﻿using Base.DAL.Models;
+﻿using Base.DAL.Models.BaseModels;
+using Base.DAL.Models.SystemModels;
 using Base.Repo.Interfaces;
 using Base.Services.Interfaces;
 using Microsoft.AspNetCore.Identity;

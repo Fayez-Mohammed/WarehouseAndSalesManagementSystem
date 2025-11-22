@@ -1,4 +1,4 @@
-﻿using Base.DAL.Models;
+﻿using Base.DAL.Models.SystemModels;
 using System;
 using System.Collections.Generic;
 using System.Linq;

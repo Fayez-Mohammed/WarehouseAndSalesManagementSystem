@@ -1,21 +1,27 @@
-﻿using Base.DAL.Models;
+﻿using Base.DAL.Models.BaseModels;
+using Base.DAL.Models.SystemModels;
 using Base.Repo.Implementations;
 using Base.Repo.Interfaces;
 using Base.Services.Helpers;
 using Base.Services.Interfaces;
 using Base.Shared.DTOs;
+using Base.Shared.Responses;
+using Base.Shared.Responses.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using RepositoryProject.Specifications;
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
@@ -25,1039 +31,611 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using static Azure.Core.HttpHeader;
+using static System.Net.WebRequestMethods;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Base.Services.Implementations
 {
     public class AuthService : IAuthService
     {
-        private readonly UserManager<ApplicationUser> _userManager;
-        private readonly RoleManager<IdentityRole> _roleManager;
-        private readonly IEmailSender _emailSender;
+        private readonly IUserService _userService;
+        private readonly IRefreshTokenService _refreshTokenService;
+        private readonly IJwtService _jwtService;
         private readonly IOtpService _otpService;
-        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<AuthService> _logger;
         private readonly IConfiguration _config;
-        private const string DefaultRole = "User";
-        private const string DefaultUserType = "User";
-        private readonly IJwtService _jwtService;
-        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public AuthService(IJwtService jwtService,
-            UserManager<ApplicationUser> userManager,
-            RoleManager<IdentityRole> roleManager,
-            IEmailSender emailSender,
+        public AuthService(
+            IUserService userService,
+            IRefreshTokenService refreshTokenService,
+            IJwtService jwtService,
             IOtpService otpService,
-            IUnitOfWork unitOfWork,
             ILogger<AuthService> logger,
-            IConfiguration config,
-            IHttpContextAccessor httpContextAccessor)
+            IConfiguration configuration)
         {
+            _userService = userService;
+            _refreshTokenService = refreshTokenService;
             _jwtService = jwtService;
-            _userManager = userManager;
-            _roleManager = roleManager;
-            _emailSender = emailSender;
             _otpService = otpService;
-            _unitOfWork = unitOfWork;
             _logger = logger;
-            _config = config;
-            _httpContextAccessor = httpContextAccessor;
+            _config = configuration;
         }
 
-        /// <summary>
-        /// Logins the asynchronous.
-        /// </summary>
-        /// <param name="model">The model.</param>
-        /// <returns></returns>
-        /// <exception cref="System.ArgumentNullException">model</exception>
+        #region Login
         public async Task<LoginResult> LoginUserAsync(LoginDTO model)
         {
-            // يجب أن يتم التحقق من صحة ModelState في الـ Controller، لكن التحقق من الـ null مهم هنا
-            if (model is null)
-                throw new ArgumentNullException(nameof(model));
+            if (model == null) throw new ArgumentNullException(nameof(model));
 
-            // 1. جلب المستخدم والتحقق من كلمة المرور
-            var user = await _userManager.FindByEmailAsync(model.Email);
-
-            if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
+            var user = await _userService.GetByEmailAsync(model.Email);
+            if (user == null || !await _userService.CheckPasswordAsync(user, model.Password))
             {
-                await Task.Delay(500); // Protective: تأخير زمني
-                return new LoginResult { Success = false, Message = "Invalid credentials." };
-            }
-
-            // 2. التحقق من تأكيد الإيميل
-            if (!await _userManager.IsEmailConfirmedAsync(user))
-            {
-                try
-                {
-                    await SendOtpAsync(user.Email);
-                }
-                catch (Exception ex)
-                {
-                    // Logging the email failure here
-                    _logger?.LogError(ex, "Failed to resend confirmation email to {Email}", user.Email);
-                }
+                await Task.Delay(500); // Anti-brute-force delay
                 return new LoginResult
                 {
-                    Success = true,
-                    RequiresOtpVerification = user.TwoFactorEnabled,
-                    EmailConfirmed = user.EmailConfirmed,
-                    Message = "Your account is not confirmed. A new confirmation email has been sent."
+                    Success = false,
+                    Message = "Invalid credentials.",
+                    ErrorCode = "INVALID_CREDENTIALS"
                 };
             }
 
-            // 3. التحقق من قفل الحساب
-            if (await _userManager.IsLockedOutAsync(user))
+            if (!user.EmailConfirmed)
             {
-                return new LoginResult { Success = false, Message = "Your account is locked. Please try again later." };
-            }
-
-
-            if (await _userManager.GetTwoFactorEnabledAsync(user))
-            {
-                // 4.1. المصادقة الثنائية مفعلة - توليد OTP وإرساله
-                try
+                await _otpService.ResendOtpAsync(user.Id, user.Email, "verifyemail");
+                return new LoginResult
                 {
-                    await SendOtpAsync(user.Email);
-                    return new LoginResult
+                    Success = true,
+                    Message = "Your account is not confirmed. OTP sent.",
+                    Verification = new VerificationDetails
                     {
-                        Success = true,
                         RequiresOtpVerification = user.TwoFactorEnabled,
-                        EmailConfirmed = user.EmailConfirmed,
-                        Message = "Credentials accepted. A One-Time Password (OTP) has been sent to your email."
-                    };
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex, "Failed to send OTP email during login for user {UserId}", user.Id);
-                    return new LoginResult
-                    {
-                        Success = false,
-                        Message = "Failed to send OTP email. Please try again later."
-                    };
-                }
-            }
-            else
-            {
-                // 4.2. المصادقة الثنائية غير مفعلة - إصدار JWT
-                var accesstoken = await _jwtService.GenerateJwtTokenAsync(user);
-                if (accesstoken == null)
-                {
-                    return new LoginResult
-                    {
-                        Success = false,
-                        Message = "Failed to generate access token token. Please try again later."
-                    };
-                }
-
-
-                // Generate secure refresh token (plain)
-                var plainRefreshToken = TokenGenerator.GenerateRandomToken();
-                var refreshTokenHash = TokenGenerator.ComputeSha256Hash(plainRefreshToken);
-
-                // Model metadata
-                var refreshToken = new RefreshToken
-                {
-                    TokenHash = refreshTokenHash,
-                    UserId = user.Id,
-                    CreatedAtUtc = DateTime.UtcNow,
-                    CreatedByIp = _httpContextAccessor?.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    CreatedByUserAgent = _httpContextAccessor?.HttpContext?.Request.Headers["User-Agent"].ToString() ?? "unknown",
-                    ExpiresAtUtc = DateTime.UtcNow.AddDays(30) // من config لو حبيت
+                        EmailConfirmed = false,
+                        Email = user.Email // Minimal info
+                    }
                 };
+            }
 
-                // Save hashed refresh token to DB
-                var repo = _unitOfWork.Repository<RefreshToken>();
-                await repo.AddAsync(refreshToken);
-
-                if (await _unitOfWork.CompleteAsync() <= 0)
+            if (await _userService.IsLockedOutAsync(user))
+            {
+                return new LoginResult
                 {
-                    return new LoginResult
-                    {
-                        Success = false,
-                        Message = "Failed to save refresh token. Please try again later."
-                    };
-                }
+                    Success = false,
+                    Message = "Account locked.",
+                    ErrorCode = "ACCOUNT_LOCKED"
+                };
+            }
 
-                var roles = await _userManager.GetRolesAsync(user);
+            if (user.TwoFactorEnabled)
+            {
+                await _otpService.ResendOtpAsync(user.Id, user.Email, "login");
                 return new LoginResult
                 {
                     Success = true,
-                    Message = "Login successful.",
-                    RequiresOtpVerification = user.TwoFactorEnabled,
-                    EmailConfirmed = user.EmailConfirmed,
-                    Token = accesstoken,
-                    RefreshToken = plainRefreshToken,
-                    user = new
+                    Message = "OTP sent for login.",
+                    Verification = new VerificationDetails
                     {
-                        user.Id,
-                        user.UserName,
-                        user.Email,
-                        user.UserType,
-                        Roles = roles
+                        RequiresOtpVerification = true,
+                        EmailConfirmed = true,
+                        Email = user.Email
                     }
-
                 };
             }
+
+            // Full success
+            var token = await _jwtService.GenerateJwtTokenAsync(user);
+            var refreshToken = await _refreshTokenService.CreateRefreshTokenAsync(user.Id);
+            var roles = await _userService.GetRolesAsync(user);
+            var expiry = DateTime.UtcNow.AddMinutes(int.Parse(_config["Auth:Jwt:Minutes"] ?? "60")); // Example expiry; adjust based on JWT config
+
+            return new LoginResult
+            {
+                Success = true,
+                Message = "Login successful.",
+                Auth = new AuthDetails { Token = token, RefreshToken = refreshToken, TokenExpiry = expiry },
+                Verification = new VerificationDetails { RequiresOtpVerification = false, EmailConfirmed = true, Email = user.Email ?? "NA" },
+                User = new UserDetails
+                {
+                    Id = user.Id,
+                    UserName = user.UserName,
+                    Email = user.Email,
+                    UserType = user.UserType,
+                    Roles = roles
+                }
+            };
         }
 
-        /*public async Task<RefreshTokenRespone> RefreshAsync(RefreshTokenRequest model)
-        {
-            try
-            {
-                var oldToken = await GetByTokenAsync(model.RefreshToken);
-                if (oldToken == null || !oldToken.IsActive) throw new UnauthorizedException("Invalid or expired refresh token");
-                // Optionally update cookie
-                oldToken.Revoked = DateTime.UtcNow;
-                var newRefreshToken = GenerateRefreshToken();
-                newRefreshToken.UserId = oldToken.UserId;
-                await AddTokenAsync(newRefreshToken);
 
-                var user = oldToken.User;
-                var newAccessToken = await GenerateJwtToken(user);
-
-                return new RefreshTokenRespone
-                {
-                    AccessToken = newAccessToken,
-                    RefreshToken = newRefreshToken.Token
-                };
-            }
-            catch (Exception ex)
-            {
-                throw ex;
-            }
-        }*/
-
-        /// <summary>
-        /// Verifies the login asynchronous.
-        /// </summary>
-        /// <param name="model">The model.</param>
-        /// <returns></returns>
-        /// <exception cref="System.ArgumentNullException">model</exception>
-        /// <exception cref="System.InvalidOperationException">User authentication failed (User ID in OTP store not found).</exception>
         public async Task<LoginResult> VerifyLoginAsync(VerifyOtpDTO model)
         {
-            try
+            if (model == null) throw new ArgumentNullException(nameof(model));
+
+            var (isValid, userId, errorCode) = await _otpService.ValidateOtpAsync(model.Email, model.Otp, "login");
+            if (!isValid)
             {
-                if (model is null)
-                    throw new ArgumentNullException(nameof(model));
-
-                // 1. Validate OTP
-                var (isValid, userId) = await _otpService.ValidateOtpAsync(model.Email, model.Otp);
-                if (!isValid)
-                    return new LoginResult { Success = false, Message = "Invalid OTP. Please try again later." };
-
-                // 2. Load user
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
-                    throw new InvalidOperationException("User authentication failed (User ID not found).");
-
-                // Remove OTP (best effort)
-                try { await _otpService.RemoveOtpAsync(model.Email); } catch { }
-
-                // 3. Generate access token
-                var accessToken = await _jwtService.GenerateJwtTokenAsync(user);
-                if (accessToken == null)
-                {
-                    return new LoginResult
-                    {
-                        Success = false,
-                        Message = "Failed to generate authentication token. Please try again later."
-                    };
-                }
-
-                // Generate secure refresh token (plain)
-                var plainRefreshToken = TokenGenerator.GenerateRandomToken();
-                var refreshTokenHash = TokenGenerator.ComputeSha256Hash(plainRefreshToken);
-
-                // Model metadata
-                var refreshToken = new RefreshToken
-                {
-                    TokenHash = refreshTokenHash,
-                    UserId = user.Id,
-                    CreatedAtUtc = DateTime.UtcNow,
-                    CreatedByIp = _httpContextAccessor?.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    CreatedByUserAgent = _httpContextAccessor?.HttpContext?.Request.Headers["User-Agent"].ToString() ?? "unknown",
-                    ExpiresAtUtc = DateTime.UtcNow.AddDays(30) // من config لو حبيت
-                };
-
-                // Save hashed refresh token to DB
-                var repo = _unitOfWork.Repository<RefreshToken>();
-                await repo.AddAsync(refreshToken);
-
-                if (await _unitOfWork.CompleteAsync() <= 0)
-                {
-                    return new LoginResult
-                    {
-                        Success = false,
-                        Message = "Failed to save refresh token. Please try again later."
-                    };
-                }
-
-                var roles = await _userManager.GetRolesAsync(user);
-
-                // 5. Return login result (access + refresh)
+                await Task.Delay(500); // Anti-brute-force delay
                 return new LoginResult
                 {
-                    Success = true,
-                    Message = "Login successful.",
-                    RequiresOtpVerification = user.TwoFactorEnabled,
-                    EmailConfirmed = user.EmailConfirmed,
-                    Token = accessToken,
-                    RefreshToken = plainRefreshToken, // raw token sent to client ONLY
-                    user = new
-                    {
-                        user.Id,
-                        user.UserName,
-                        user.Email,
-                        user.UserType,
-                        Roles = roles
-                    }
+                    Success = false,
+                    Message = "Invalid OTP.",
+                    ErrorCode = "INVALID_OTP"
                 };
             }
-            catch
+
+            var user = await _userService.GetByIdAsync(userId);
+            if (user == null)
             {
-                try { await _otpService.RemoveOtpAsync(model?.Email!); } catch { }
-                throw;
+                return new LoginResult
+                {
+                    Success = false,
+                    Message = "User not found.",
+                    ErrorCode = "USER_NOT_FOUND"
+                };
             }
+
+            await _otpService.RemoveOtpAsync(model.Email, "login");
+
+            // Optional: Re-check lockout or confirmation if needed, but assuming handled in initial login
+            if (await _userService.IsLockedOutAsync(user))
+            {
+                return new LoginResult
+                {
+                    Success = false,
+                    Message = "Account locked.",
+                    ErrorCode = "ACCOUNT_LOCKED"
+                };
+            }
+
+            var token = await _jwtService.GenerateJwtTokenAsync(user);
+            var refreshToken = await _refreshTokenService.CreateRefreshTokenAsync(user.Id);
+            var roles = await _userService.GetRolesAsync(user);
+            var expiry = DateTime.UtcNow.AddMinutes(int.Parse(_config["Auth:Jwt:Minutes"] ?? "60")); // Example expiry; adjust based on JWT config
+
+            return new LoginResult
+            {
+                Success = true,
+                Message = "OTP verified successfully. Login complete.",
+                Auth = new AuthDetails { Token = token, RefreshToken = refreshToken, TokenExpiry = expiry },
+                Verification = new VerificationDetails { RequiresOtpVerification = false, EmailConfirmed = user.EmailConfirmed, Email = user.Email ?? "NA" }, // Defaults
+                User = new UserDetails
+                {
+                    Id = user.Id,
+                    UserName = user.UserName,
+                    Email = user.Email,
+                    UserType = user.UserType,
+                    Roles = roles
+                }
+            };
         }
 
-        /*public async Task<LoginResult> VerifyLoginAsync(VerifyOtpDTO model)
+        public async Task<ApiResponse> LogoutAsync(string userId)
         {
-            try
+            if (string.IsNullOrEmpty(userId))
             {
-                if (model is null) throw new ArgumentNullException(nameof(model));
-
-                var (isValid, userId) = await _otpService.ValidateOtpAsync(model.Email, model.Otp);
-                if (!isValid) return new LoginResult { Success = false, Message = "Invalid OTP. Please try again later." };
-
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
-                    throw new InvalidOperationException("User authentication failed (User ID in OTP store not found).");
-
-                try { await _otpService.RemoveOtpAsync(model.Email); } catch {  best-effort }
-
-                var token = await _jwtService.GenerateJwtTokenAsync(user);
-                if (token == null)
+                return new ApiResponse
                 {
-                    return new LoginResult
-                    {
-                        Success = false,
-                        Message = "Failed to generate authentication token. Please try again later."
-                    };
-                }
-
-                var roles = await _userManager.GetRolesAsync(user);
-
-                return new LoginResult
-                {
-                    Success = true,
-                    Message = "Login successful.",
-                    RequiresOtpVerification = user.TwoFactorEnabled,
-                    EmailConfirmed = user.EmailConfirmed,
-                    Token = token,
-                    user = new
-                    {
-                        user.Id,
-                        user.UserName,
-                        user.Email,
-                        user.UserType,
-                        Roles = roles
-
-                    }
+                    Success = false,
+                    Message = "Invalid user ID.",
+                    ErrorCode = "INVALID_USER_ID"
                 };
             }
-            catch (Exception)
+
+            // Assuming user existence check is not needed, but added for robustness
+            var user = await _userService.GetByIdAsync(userId);
+            if (user == null)
             {
-                try { await _otpService.RemoveOtpAsync(model.Email); } catch { best-effort }
-                throw;
+                return new ApiResponse
+                {
+                    Success = false,
+                    Message = "User not found.",
+                    ErrorCode = "USER_NOT_FOUND"
+                };
             }
+
+            await _refreshTokenService.RevokeAllUserTokensAsync(userId, "User logged out");
+
+            return new ApiResponse
+            {
+                Success = true,
+                Message = "Logged out successfully."
+            };
+        }
+
+        /*public async Task<ExternalLoginResponseDTO> HandleExternalLoginAsync(string email, string fullName)
+        {
+            var user = await _userService.GetByEmailAsync(email);
+            if (user is null)
+
+                user = await _userService.GetOrCreateExternalUserAsync(email, fullName);
+
+            var token = await _jwtService.GenerateJwtTokenAsync(user);
+            var roles = await _userService.GetRolesAsync(user);
+
+            return new ExternalLoginResponseDTO
+            {
+                Token = token,
+                user = new { user.Id, user.UserName, user.Email, Roles = roles }
+            };
         }*/
+        #endregion
 
-        /// <summary>Sends the otp asynchronous.</summary>
-        /// <param name="email">The email.</param>
-        /// <exception cref="RepositoryProject.Services.BadRequestException">Invalid request data.
-        /// or
-        /// This email is Not registered.</exception>
-        public async Task SendOtpAsync(string email)
+        #region register
+        public async Task<RegisterResult> RegisterAsync(RegisterDTO model, string ip, string userAgent)
         {
-            if (string.IsNullOrWhiteSpace(email))
-                throw new BadRequestException("Invalid request data.");
+            if (model == null) throw new ArgumentNullException(nameof(model));
 
-            var user = await _userManager.FindByEmailAsync(email);
-            if (user is null) throw new BadRequestException("This email is Not registered.");
-            try
+            var existingUser = await _userService.GetByEmailAsync(model.Email);
+            if (existingUser != null)
+                return RegisterResult.EmailAlreadyExists();
+
+            var user = new ApplicationUser
             {
-                var otp = await _otpService.GenerateAndStoreOtpAsync(user.Id, user.Email!);
-                await _emailSender.SendEmailAsync(user.Email, "Your OTP Code",
-                    $"<p>Your OTP verification code is: <b>{otp}</b></p><p>It will expire in 5 minutes.</p>");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to send OTP");
-                throw new BadRequestException("Failed to send OTP");
-            }
-        }
-
-        /// <summary>
-        /// Returns true when verification succeeded; false when OTP invalid/expired.
-        /// Throws on other failures (e.g. confirm-email failed).
-        /// </summary>
-        /// <param name="model"></param>
-        /// <returns></returns>
-        /// <exception cref="System.ArgumentNullException">model</exception>
-        /// <exception cref="System.InvalidOperationException">User authentication failed (User ID in OTP store not found).</exception>
-        /// <exception cref="Base.Services.Implementations.BadRequestException">Email confirmation failed: {string.Join(", ", errors)}</exception>
-        public async Task<bool> VerifyEmailAsync(VerifyOtpDTO model)
-        {
-            try
-            {
-                if (model is null) throw new ArgumentNullException(nameof(model));
-
-                var (isValid, userId) = await _otpService.ValidateOtpAsync(model.Email, model.Otp);
-                if (!isValid) return false;
-
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
-                    throw new InvalidOperationException("User authentication failed (User ID in OTP store not found).");
-
-                if (!user.EmailConfirmed)
-                {
-                    var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                    var result = await _userManager.ConfirmEmailAsync(user, token);
-                    if (!result.Succeeded)
-                    {
-                        var errors = result.Errors.Select(e => e.Description).ToList();
-                        throw new BadRequestException($"Email confirmation failed: {string.Join(", ", errors)}");
-                    }
-                }
-                try { await _otpService.RemoveOtpAsync(model.Email); } catch { /* best-effort */ }
-                return true;
-
-            }
-            catch (Exception)
-            {
-                try { await _otpService.RemoveOtpAsync(model.Email); } catch { /* best-effort */ }
-                return false;
-                throw;
-            }
-        }
-
-        public async Task<string> VerifyForgetPassword(VerifyForgetPasswordDTO model)
-        {
-            try
-            {
-                if (model is null) throw new ArgumentNullException(nameof(model));
-
-                var (isValid, userId) = await _otpService.ValidateOtpAsync(model.Email, model.Otp);
-                if (!isValid) return "Invalid OTP";
-
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
-                    throw new InvalidOperationException($"Security flow error: User Email '{model.Email}' associated with valid OTP was not found.");
-
-                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-
-                try { await _otpService.RemoveOtpAsync(model.Email); } catch { /* best-effort */ }
-                return token;
-
-            }
-            catch (Exception ex)
-            {
-                try { await _otpService.RemoveOtpAsync(model.Email); } catch { /* best-effort */ }
-                return ex.Message;
-                throw;
-            }
-        }
-
-        /// <summary>
-        /// Resets the password.
-        /// </summary>
-        /// <param name="model">The model.</param>
-        /// <returns>
-        ///   <see langword="if" /> true if reset succeeded; otherwise, false (invalid/expired OTP).
-        /// </returns>
-        /// <exception cref="System.ArgumentNullException">model</exception>
-        /// <exception cref="System.InvalidOperationException">Security flow error: User Email '{model.Email}' associated with valid OTP was not found.</exception>
-        /// <exception cref="Base.Services.Implementations.BadRequestException">Password reset failed: {string.Join(", ", errors)}</exception>
-        public async Task<bool> ResetPassword(ResetPasswordDTO model)
-        {
-            try
-            {
-
-                if (model is null) throw new ArgumentNullException(nameof(model));
-
-                /*var (isValid, userId) = await _otpService.ValidateOtpAsync(model.Email, model.Otp);
-
-                if (!isValid) return false;*/
-
-                var user = await _userManager.FindByEmailAsync(model.Email);
-                if (user == null)
-                    throw new BadRequestException("Invalid request");
-
-                var isValid = await _userManager.VerifyUserTokenAsync(user, _userManager.Options.Tokens.PasswordResetTokenProvider,
-                    "ResetPassword", model.Token);
-                if (!isValid) return false;
-
-                var result = await _userManager.ResetPasswordAsync(user, model.Token, model.NewPassword);
-                if (!result.Succeeded)
-                {
-                    var errors = result.Errors.Select(e => e.Description).ToList();
-                    throw new BadRequestException($"Password reset failed: {string.Join(", ", errors)}");
-                }
-
-                return true;
-            }
-            catch (Exception)
-            {
-                return false;
-                throw;
-
-            }
-        }
-
-
-        /// <summary>
-        /// Changes the password asynchronous.
-        /// </summary>
-        /// <param name="userId">The user identifier.</param>
-        /// <param name="model">The model.</param>
-        /// <exception cref="System.ArgumentNullException">model</exception>
-        /// <exception cref="System.Collections.Generic.KeyNotFoundException">User with ID '{userId}' was not found.</exception>
-        /// <exception cref="Base.Services.Implementations.BadRequestException">Change Password failed: {string.Join(", ", errors)}</exception>
-        public async Task ChangePasswordAsync(string userId, ChangePasswordDTO model)
-        {
-            try
-            {
-                if (model is null) throw new ArgumentNullException(nameof(model));
-
-                // 1. User Validation (Moved from controller, but checks the ID passed by controller)
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null) throw new NotFoundException($"User with ID '{userId}' was not found.");
-
-                var result = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
-                if (!result.Succeeded)
-                {
-                    var errors = result.Errors.Select(e => e.Description);
-                    throw new BadRequestException($"Change Password failed: {string.Join(", ", errors)}");
-
-                }
-
-            }
-            catch (Exception ex)
-            {
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                throw new InternalServerException("An unexpected internal error occurred during Change Password.");
-            }
-
-        }
-
-        /// <summary>
-        /// Handel External Login
-        /// </summary>
-        /// <param name="email"></param>
-        /// <param name="fullName"></param>
-        /// <returns></returns>
-        /// <exception cref="BadRequestException"></exception>
-        /// <exception cref="InternalServerException"></exception>
-        public async Task<ExternalLoginResponseDTO> HandleExternalLoginAsync(string email, string fullName)
-        {
-            if (email is null) throw new BadRequestException("Not Valid Email.");
-            var profileRepository = _unitOfWork.Repository<UserProfile>();
-            IDbContextTransaction transaction = null;
-
-            // 1. البحث عن المستخدم
-            var user = await _userManager.FindByEmailAsync(email);
-            bool newUser = (user == null);
-            UserProfile profile = null;
-
-            try
-            {
-                // ----------------------------------------------------------------------
-                // 2. معالجة المستخدم الجديد (ضمن معاملة متكاملة)
-                // ----------------------------------------------------------------------
-                if (newUser)
-                {
-                    // 🟢 وقائي: بدء معاملة
-                    transaction = await _unitOfWork.BeginTransactionAsync();
-
-                    user = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true };
-                    var createResult = await _userManager.CreateAsync(user, Guid.NewGuid().ToString("N"));
-                    if (createResult is null) throw new BadRequestException("Failed to create new user account.");
-                    if (!createResult.Succeeded)
-                    {
-                        if (transaction != null) await transaction.RollbackAsync();
-                        // استخدام استثناء ليرسله الـ Controller كـ 500
-                        throw new BadRequestException("Failed to create new user account.");
-                    }
-                    await _userManager.AddToRoleAsync(user, "User");
-
-                    // 💡 إنشاء Profile للمستخدم الجديد
-                    profile = new UserProfile
-                    {
-                        UserId = user.Id,
-                        FullName = fullName ?? email,
-                        PhoneNumber = ""
-                    };
-
-                    await profileRepository.AddAsync(profile);
-
-                    await _unitOfWork.CompleteAsync();
-                    await transaction.CommitAsync();
-                }
-
-                // ----------------------------------------------------------------------
-                // 3. معالجة المستخدم الحالي (أو الجديد بعد الإنشاء)
-                // ----------------------------------------------------------------------
-
-                // 💡 إذا كان المستخدم قديمًا، يتم جلب ملف التعريف هنا
-                if (!newUser)
-                {
-                    // نفترض أن GetByIdAsync يجلب البروفايل بناءً على user.Id
-                    profile = await profileRepository.GetByIdAsync(user.Id);
-                }
-
-                // 💡 معالجة Profile المفقود أو تحديث الاسم
-                if (profile == null)
-                {
-                    profile = new UserProfile
-                    {
-                        UserId = user.Id,
-                        FullName = fullName ?? email,
-                        PhoneNumber = ""
-                    };
-
-                    await profileRepository.AddAsync(profile);
-                    await _unitOfWork.CompleteAsync();
-                }
-                else if (string.IsNullOrEmpty(profile.FullName) && !string.IsNullOrEmpty(fullName))
-                {
-                    // Protective: تحديث الاسم إذا كان موجودًا في Claim لكنه مفقود من Profile
-                    profile.FullName = fullName;
-                    await profileRepository.UpdateAsync(profile);
-                    await _unitOfWork.CompleteAsync();
-                }
-
-                // ----------------------------------------------------------------------
-                // 4. توليد JWT وإرجاع البيانات
-                // ----------------------------------------------------------------------
-
-                var token = await _jwtService.GenerateJwtTokenAsync(user);
-
-                if (token == null)
-                {
-                    throw new BadRequestException("Failed to generate JWT token after successful login/creation.");
-                }
-
-                var roles = await _userManager.GetRolesAsync(user);
-                return new ExternalLoginResponseDTO
-                {
-                    Token = token,
-                    user = new
-                    {
-                        user.Id,
-                        user.UserName,
-                        user.Email,
-                        Roles = roles
-                    }
-                };
-            }
-            catch (Exception ex)
-            {
-                // 🟢 Protective: التراجع عن المعاملة في حالة حدوث أي خطأ غير متوقع
-                if (transaction != null)
-                {
-                    // Log the error (ex) here
-                    await transaction.RollbackAsync();
-                }
-                if (ex is BadRequestException or UnauthorizedException or NotFoundException or ForbiddenException)
-                    throw;
-                throw new InternalServerException("An unexpected internal error occurred during HandleExternalLogin.");
-            }
-        }
-
-
-        public async Task RegisterAsync(RegisterDTO model)
-        {
-            // 1. Input Validation
-            if (model is null)
-                throw new ArgumentNullException(nameof(model));
-            var ClincRepo = _unitOfWork.Repository<Clinic>();
-            var spec = new BaseSpecification<Clinic>(c => c.Email.ToLower() == model.Email.ToLower());
-            var result = (await ClincRepo.CountAsync(spec)) > 0 || (await _userManager.FindByEmailAsync(model.Email) is not null);
-            if (result) throw new BadRequestException("This email is already registered.");
-
-            // 2. Transaction Setup (using statement ensures Dispose/Rollback on failure)
-            await using var transaction = await _unitOfWork.BeginTransactionAsync();
-
-            try
-            {
-                // 3. Mapping and Identity Creation
-                var user = await MapAndCreateUser(model);
-
-                // 4. Identity Creation - الآن نستخدم await بشكل صحيح
-                var createUserResult = await _userManager.CreateAsync(user, model.Password);
-
-                if (createUserResult is null)
-                    throw new InternalServerException("An unexpected error occurred during user creation.");
-
-                if (!createUserResult.Succeeded)
-                {
-                    // رمي BadRequestException إذا فشل Identity Framework في الإنشاء
-                    throw new BadRequestException(createUserResult.Errors.Select(e => e.Description));
-                }
-
-                // 4. Role Assignment (Handling role creation if necessary is better done during app startup/seeding)
-                await AssignUserRoleAsync(user);
-
-                // 5. Profile Creation (Data layer logic)
-                await CreateUserProfileAsync(user.Id, model);
-
-                // 6. Commit Transaction
-                if (await _unitOfWork.CompleteAsync() > 0)
-                {
-                    await transaction.CommitAsync();
-                }
-                else
-                {
-                    // If CompleteAsync returns 0 but didn't throw, something is wrong, force Rollback
-                    await transaction.RollbackAsync();
-                    throw new InternalServerException("Database transaction failed to save changes.");
-                }
-
-                // 7. Post-Registration Action (Best-effort, non-critical)
-                // Note: The original code threw BadRequestException on failed OTP send, 
-                // which might break the user experience unnecessarily. We revert to a simple log and continue.
-                await SendRegistrationOtpIfPossible(user);
-            }
-            catch (BadRequestException ex)
-            {
-                // Caught BadRequest from Identity or Mapping errors. Rollback and re-throw.
-                await transaction.RollbackAsync();
-                throw;
-            }
-            catch (Exception ex) when (ex is not BadRequestException)
-            {
-                // Catch all other exceptions (DB failure, unexpected Identity errors, etc.)
-                await transaction.RollbackAsync();
-
-                _logger.LogError(ex, "Unexpected critical error during user registration for {Email}", model.Email);
-
-                // Wrap unexpected exceptions in InternalServerException
-                throw new InternalServerException("An unexpected error occurred during registration. Please try again.");
-            }
-        }
-
-        #region RefreshToken
-        public async Task<RefreshToken> CreateRefreshTokenAsync(string userId, string ip, string userAgent, TimeSpan ttl)
-        {
-            var tokenPlain = TokenGenerator.GenerateRandomToken();
-            var tokenHash = TokenGenerator.ComputeSha256Hash(tokenPlain);
-
-            var refreshToken = new RefreshToken
-            {
-                TokenHash = tokenHash,
-                UserId = userId,
-                CreatedAtUtc = DateTime.UtcNow,
-                CreatedByIp = ip ?? "unknown",
-                CreatedByUserAgent = userAgent ?? "unknown",
-                ExpiresAtUtc = DateTime.UtcNow.Add(ttl)
+                UserName = model.Email,
+                Email = model.Email,
+                FullName = model.FullName,
+                PhoneNumber = model.PhoneNumber,
+                TwoFactorEnabled = false,
+                IsActive = true,
+                UserType = "User",
+                EmailConfirmed = false
             };
 
-            var repo = _unitOfWork.Repository<RefreshToken>();
-            await repo.AddAsync(refreshToken);
-            await _unitOfWork.CompleteAsync();
-
-            // Return object with plain text token in memory so caller can send it to client
-            // but DO NOT persist plain token
-            return new RefreshToken
-            {
-                Id = refreshToken.Id,
-                TokenHash = tokenHash,
-                UserId = refreshToken.UserId,
-                CreatedAtUtc = refreshToken.CreatedAtUtc,
-                CreatedByIp = refreshToken.CreatedByIp,
-                CreatedByUserAgent = refreshToken.CreatedByUserAgent,
-                ExpiresAtUtc = refreshToken.ExpiresAtUtc,
-                RevokedAtUtc = null
-            };
-        }
-
-        public async Task<RefreshTokenResponse> RefreshAsync(RefreshTokenRequest request)
-        {
-            if (string.IsNullOrWhiteSpace(request.RefreshToken))
-                throw new UnauthorizedAccessException("Refresh token required.");
-
-            var incomingHash = TokenGenerator.ComputeSha256Hash(request.RefreshToken);
-
-            var repo = _unitOfWork.Repository<RefreshToken>();
-            var spec = new BaseSpecification<RefreshToken>(t => t.TokenHash == incomingHash);
-            spec.AllIncludes.Add(t => t.Include(r => r.User)); // include user if mapped
-            var oldToken = await repo.GetEntityWithSpecAsync(spec);
-            if (oldToken == null || !oldToken.IsActive)
-            {
-                _logger.LogWarning("Invalid or inactive refresh token used. IP:{Ip} UA:{UA}", request.Ip, request.UserAgent);
-                throw new UnauthorizedAccessException("Invalid or expired refresh token");
-            }
-
-            // We will rotate token inside a transaction to avoid race conditions
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
-
-            try
-            {
-                // Mark the old token revoked
-                oldToken.RevokedAtUtc = DateTime.UtcNow;
-                oldToken.RevokedByIp = request.Ip;
-                oldToken.ReasonRevoked = "Rotated";
-
-                // generate new token
-                var newPlainToken = TokenGenerator.GenerateRandomToken();
-                var newHash = TokenGenerator.ComputeSha256Hash(newPlainToken);
-
-                var newToken = new RefreshToken
+            var createResult = await _userService.CreateUserAsync(user, model.Password);
+            if (!createResult)
+                return new RegisterResult
                 {
-                    TokenHash = newHash,
-                    UserId = oldToken.UserId,
-                    CreatedAtUtc = DateTime.UtcNow,
-                    CreatedByIp = request.Ip ?? "unknown",
-                    CreatedByUserAgent = request.UserAgent ?? "unknown",
-                    ExpiresAtUtc = DateTime.UtcNow.AddDays(int.Parse(_config["Auth:RefreshTokenDays"] ?? "30"))
+                    Success = false,
+                    Message = "Registration failed. Please try again.",
+                    ErrorCode = "REGISTRATION_FAILED"
                 };
 
-                // link old -> new
-                oldToken.ReplacedByTokenHash = newHash;
-                await repo.AddAsync(newToken);
-                await repo.UpdateAsync(oldToken);
-                await _unitOfWork.CompleteAsync();
-                await transaction.CommitAsync();
+            // 4. إرسال OTP للتحقق من الإيميل
+            var otpResult = await _otpService.GenerateAndSendOtpAsync(user.Id, user.Email, "verifyemail");
 
-                // load user (from identity or your users table)
-                var user = await _userManager.FindByIdAsync(oldToken.UserId);
-                if (user == null || !user.IsActive)
-                {
-                    _logger.LogWarning("User not found or inactive during refresh. UserId:{UserId}", oldToken.UserId);
-                    throw new UnauthorizedAccessException("User is inactive.");
-                }
-
-                var accessToken = await _jwtService.GenerateJwtTokenAsync(user);
-
-                // return new access token and the plain new refresh token
-                return new RefreshTokenResponse(accessToken, newPlainToken);
-            }
-            catch (Exception ex)
+            if (!otpResult.Success)
             {
-                await transaction.RollbackAsync();
-                _logger.LogError(ex, "Error while rotating refresh token for Hash:{Hash}", incomingHash);
-                throw; // preserve stack trace
+                _logger?.LogWarning("OTP failed after successful registration - UserId: {UserId}", user.Id);
+                // ما نفشلش التسجيل كله بسبب الـ email، بس نسجل المشكلة
             }
+
+            return RegisterResult.Successed(
+                otpExpiresAt: otpResult.ExpiresAtUtc,
+                remainingResends: otpResult.RemainingResends
+            );
         }
 
-        public async Task RevokeAllUserRefreshTokensAsync(string userId, string reason, string currentIp = null)
+        public async Task<VerifyEmailResult> VerifyEmailAsync(VerifyOtpDTO model)
         {
-            var repo = _unitOfWork.Repository<RefreshToken>();
-            var spec = new BaseSpecification<RefreshToken>(t => t.UserId == userId && t.RevokedAtUtc == null);
-            var tokens = await repo.ListAsync(spec);
-            foreach (var t in tokens)
+            var email = model.Email.ToLowerInvariant();
+
+            // 1. تحقق من الـ OTP
+            var (isValid, userId, errorCode) = await _otpService.ValidateOtpAsync(email, model.Otp, "verifyemail");
+
+            if (!isValid)
             {
-                t.RevokedAtUtc = DateTime.UtcNow;
-                t.ReasonRevoked = reason;
-                t.RevokedByIp = currentIp;
+                return errorCode switch
+                {
+                    "OTP_EXPIRED" => VerifyEmailResult.InvalidOrExpired(),
+                    "TOO_MANY_ATTEMPTS" => VerifyEmailResult.TooManyAttempts(),
+                    _ => VerifyEmailResult.InvalidOrExpired()
+                };
             }
-            await _unitOfWork.CompleteAsync();
+
+            // 2. جيب المستخدم
+            var user = await _userService.GetByIdAsync(userId!);
+            if (user == null)
+            {
+                _logger?.LogWarning("OTP verified but user not found: {UserId}", userId);
+                return VerifyEmailResult.InvalidOrExpired(); // نكدب للأمان
+            }
+
+            // 3. لو الإيميل متحقق منه أصلاً
+            if (user.EmailConfirmed)
+                return VerifyEmailResult.AlreadyVerified();
+
+            // 4. تحديث حالة التحقق
+            user.EmailConfirmed = true;
+
+            var updateSuccess = await _userService.UpdateUserAsync(user);
+            if (!updateSuccess)
+            {
+                _logger?.LogError("Failed to update EmailConfirmed for user {UserId}", user.Id);
+                return new VerifyEmailResult { Success = false, Message = "Verification failed. Please try again." };
+            }
+
+            // 5. حذف الـ OTP المستخدم
+            await _otpService.RemoveOtpAsync(email, "verifyemail");
+
+            return VerifyEmailResult.Successed(DateTime.UtcNow);
         }
         #endregion
 
-        #region helper
-        /// <summary>
-        /// Maps the DTO to ApplicationUser and creates the user in Identity system.
-        /// </summary>
-        private async Task<ApplicationUser> MapAndCreateUser(RegisterDTO model)
+        #region forgetPassword
+        public async Task<ForgotPasswordResult> ForgotPasswordAsync(string email)
         {
-            try
-            {
-                // Mapping logic separated for cleanliness
-                var user = model.ToUser();
-                user.UserType = DefaultUserType;
-                return user;
+            // 1. Validation
+            if (string.IsNullOrWhiteSpace(email) || !new EmailAddressAttribute().IsValid(email))
+                return ForgotPasswordResult.InvalidEmail();
 
-            }
-            catch (Exception ex)
+            var user = await _userService.GetByEmailAsync(email);
+            if (user == null)
+                return ForgotPasswordResult.PrivacySafe();
+            var otpResult = await _otpService.ResendOtpAsync(user.Id, user.Email, "reset");
+            if (!otpResult.Success)
             {
-                _logger.LogWarning(ex, "Failed to map RegisterDTO for {Email}", model.Email);
-                throw new BadRequestException("Registration data format is invalid.");
+                _logger?.LogWarning("OTP generation failed for password reset - User: {UserId}, Email: {Email}, Error: {ErrorCode}",
+                    user.Id, user.Email, otpResult.ErrorCode);
+
+                return ForgotPasswordResult.FromOtpResult(otpResult);
             }
+
+
+            return ForgotPasswordResult.Successed(
+                expiresAt: otpResult.ExpiresAtUtc,
+                remainingResends: otpResult.RemainingResends
+            );
         }
 
-        /// <summary>
-        /// Ensures the default role exists and assigns it to the user.
-        /// Note: Role creation should ideally be done during application seeding.
-        /// </summary>
-        private async Task AssignUserRoleAsync(ApplicationUser user)
+        public async Task<VerifyResetOtpResult> VerifyOtpAndGenerateResetTokenAsync(VerifyOtpDTO verifyOtpDTO)
         {
-            // ملاحظة: يُفضل نقل هذه الدالة المساعدة إلى مكان يُنفذ مرة واحدة عند بدء التشغيل (Seeding).
-            await EnsureDefaultRoleExistsAsync(DefaultRole);
+            verifyOtpDTO.Email = verifyOtpDTO.Email.ToLowerInvariant();
 
-            // 1. تعيين الدور للمستخدم
-            var roleResult = await _userManager.AddToRoleAsync(user, DefaultRole);
-
-            if (!roleResult.Succeeded)
+            // 1. تحقق من الـ OTP
+            var (isValid, userId, errorCode) = await _otpService.ValidateOtpAsync(verifyOtpDTO.Email, verifyOtpDTO.Otp, "reset");
+            if (!isValid)
             {
-                // توحيد طريقة رمي الاستثناءات لتشمل رسائل الخطأ من Identity
-                var errors = string.Join("; ", roleResult.Errors.Select(e => e.Description));
-                _logger.LogError("Failed to assign default role '{Role}' to user {UserId}: {Errors}", DefaultRole, user.Id, errors);
-
-                throw new InternalServerException($"Failed to assign default role. Details: {errors}");
-            }
-        }
-
-        /// <summary>
-        /// تضمن وجود الدور الافتراضي، وتقوم بإنشائه إذا لم يكن موجوداً.
-        /// يُفضل استدعاء هذه الدالة مرة واحدة أثناء تهيئة التطبيق (Application Startup Seeding).
-        /// </summary>
-        /// <param name="roleName">اسم الدور.</param>
-        private async Task EnsureDefaultRoleExistsAsync(string roleName)
-        {
-            //if (await _roleManager.Roles.AnyAsync(r => r.Name == roleName))
-            if (!await _roleManager.RoleExistsAsync(roleName))
-            {
-                var role = new IdentityRole(roleName);
-                var createRoleResult = await _roleManager.CreateAsync(role);
-                if (createRoleResult is null) throw new InternalServerException($"CRITICAL: Failed to create default role '{roleName}'.");
-                if (!createRoleResult.Succeeded)
+                await Task.Delay(500); // Anti-brute-force delay
+                return errorCode switch
                 {
-                    var errors = string.Join("; ", createRoleResult.Errors.Select(e => e.Description));
-                    _logger.LogCritical("CRITICAL: Failed to create essential default role '{Role}'. Details: {Errors}", roleName, errors);
-
-                    // يجب رمي استثناء داخلي يمنع استمرار العملية إذا فشل إنشاء دور أساسي
-                    throw new InternalServerException($"CRITICAL: Failed to create default role '{roleName}'. Details: {errors}");
-                }
+                    "OTP_EXPIRED" => VerifyResetOtpResult.ExpiredOtp(),
+                    "TOO_MANY_ATTEMPTS" => VerifyResetOtpResult.TooManyAttempts(),
+                    _ => VerifyResetOtpResult.InvalidOtp()
+                };
             }
+
+            // 2. جيب المستخدم
+            var user = await _userService.GetByIdAsync(userId!);
+            if (user == null)
+            {
+                _logger?.LogWarning("OTP validated but user not found: {UserId}", userId);
+                return VerifyResetOtpResult.InvalidOtp(); // نكدب عشان الأمان
+            }
+
+            // 3. توليد Reset Token (URL-safe, expires in 15 minutes)
+            // Generate Identity reset token (URL-safe)
+            var resetToken = await _userService.GeneratePasswordResetTokenAsync(user);
+            var expiresAt = DateTime.UtcNow.AddMinutes(int.Parse(_config["Auth:ResetTokenMinutes"] ?? "60"));
+
+            return VerifyResetOtpResult.Successed(resetToken, expiresAt);
         }
 
-        /// <summary>
-        /// Creates and saves the UserProfile entity linked to the new user.
-        /// </summary>
-        private async Task CreateUserProfileAsync(string userId, RegisterDTO model)
+        public async Task<ResetPasswordResult> ResetPasswordAsync(ResetPasswordDTO model)
         {
-            var profileRepository = _unitOfWork.Repository<UserProfile>();
-            var profile = model.ToProfile();
-            profile.UserId = userId;
+            var email = model.Email.ToLowerInvariant();
 
-            // We don't check profileResult success here, as _unitOfWork.CompleteAsync() will reveal DB errors.
-            await profileRepository.AddAsync(profile);
-        }
-
-        /// <summary>
-        /// Tries to send an OTP email without blocking the registration process if it fails.
-        /// </summary>
-        private async Task SendRegistrationOtpIfPossible(ApplicationUser user)
-        {
-            try
+            // 2. جيب المستخدم
+            var user = await _userService.GetByEmailAsync(email);
+            if (user == null || !string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase))
             {
-                if (user.Email is not null)
-                    await SendOtpAsync(user.Email);
-            }
-            catch (Exception ex)
-            {
-                // 💡 Key Change: Log the failure and continue. 
-                // The original code threw BadRequestException here, which breaks SRP and the atomic commit concept.
-                _logger.LogWarning(ex, "Failed to send OTP after successful registration for {Email}", user.Email);
-            }
-        }
-
-        /*
-           /// <summary>
-        /// Generates the JWT token.
-        /// </summary>
-        /// <param name="user">The user.</param>
-        /// <returns>
-        ///   <see langword="The" /> JWT token as string.
-        /// </returns>
-        public async Task<string> GenerateJwtToken(ApplicationUser user)
-        {
-            // 1. Protective: Check for vital JWT configurations
-            var jwtKey = _config["Jwt:Key"];
-            var jwtIssuer = _config["Jwt:Issuer"];
-            var jwtAudience = _config["Jwt:Audience"];
-
-            // Check key length (min 32 chars for 256-bit security)
-            if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32 || string.IsNullOrEmpty(jwtIssuer) || string.IsNullOrEmpty(jwtAudience))
-            {
-                // Log the error internally
-                _logger?.LogError("JWT configuration settings are missing or key is too short (min 32 characters required).");
-                return null;
+                return ResetPasswordResult.InvalidOrExpired();
             }
 
-            try
-            {
-                // 2. Build Core Claims
-                var claims = new List<Claim>
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-                new Claim(ClaimTypes.NameIdentifier, user.Id),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
-                new Claim(ClaimTypes.Name, user.UserName ?? string.Empty),
-                new Claim("UserType", user.UserType ?? string.Empty)
-            };
+            // 4. غيّر الباسوورد
+            var changeResult = await _userService.ResetPasswordAsync(user, model.Token, model.NewPassword);
 
-                // Get and add Roles
-                var roles = await _userManager.GetRolesAsync(user);
-                foreach (var role in roles)
+            if (!changeResult)
+            {
+                _logger?.LogWarning("Password reset failed for user {UserId}", user.Id);
+                return new ResetPasswordResult
                 {
-                    claims.Add(new Claim(ClaimTypes.Role, role));
-                }
+                    Success = false,
+                    Message = "Failed to change password.",
+                    ErrorCode = "RESET_FAILED"
+                };
+            }
 
-                // 3. Generate Key and Credentials
-                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
-                var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            // 7. Log مهم جدًا للأمان
+            _logger?.LogInformation("Password reset successful for user {UserId}",
+                user.Id);
 
-                // Use UtcNow for better time zone handling
-                var token = new JwtSecurityToken(
-                    issuer: jwtIssuer,
-                    audience: jwtAudience,
-                    claims: claims,
-                    notBefore: DateTime.UtcNow,
-                    expires: DateTime.UtcNow.AddMinutes(1),
-                    signingCredentials: creds
-                );
+            return ResetPasswordResult.Successed(DateTime.UtcNow);
+        }
+        #endregion
 
-                return new JwtSecurityTokenHandler().WriteToken(token);
+        #region 2FA
+        public async Task<ApiResponse> InitiateEnable2FaAsync(string email)
+        {
+            var user = await _userService.GetByEmailAsync(email);
+            if (user == null) return ApiResponse.Fail("User not found.");
+            try
+            {
+
+                await _otpService.GenerateAndSendOtpAsync(user.Id, user.Email, "2fa");
+                return ApiResponse.Ok(message: "Verification code sent successfully. Check your email.");
+                //return new ApiResponse.Successed { Success = true, Message = "OTP sent to confirm enabling 2FA." };
             }
             catch (Exception ex)
             {
-                // Log any unexpected failure during token generation
-                _logger?.LogError(ex, "An unexpected error occurred during JWT token generation for user {UserId}.", user.Id);
-                return null;
+                _logger.LogWarning(ex, "Failed to send enable-2FA OTP to {Email}", email);
+                return ApiResponse.Fail("Failed to send verification code. Please try again later.", "OTP_DELIVERY_FAILED");
+                //return new BaseResponse { Success = false, Message = "Failed to send OTP." };
             }
-        } 
-         private RefreshToken GenerateRefreshToken()
-        {
-            return new RefreshToken
-            {
-                Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
-                Expires = DateTime.UtcNow.AddDays(7),
-                Created = DateTime.UtcNow
-            };
         }
 
-        public async Task<RefreshToken> GetByTokenAsync(string token)
+        public async Task<ApiResponse> ConfirmEnable2FaAsync(string email, string otp)
         {
-            var repo = _unitOfWork.Repository<RefreshToken>();
-            var spec = new BaseSpecification<RefreshToken>(t => t.Token == token);
-            spec.AllIncludes.Add(e => e.Include(d => d.User));
-            var tokenobj = await repo.GetEntityWithSpecAsync(spec);
-            return tokenobj;
+            var (isValid, userId, errorCode) = await _otpService.ValidateOtpAsync(email, otp, "2fa");
+            if (!isValid) return ApiResponse.Fail("Invalid or expired verification code.", "INVALID_OTP");
+
+            var user = await _userService.GetByIdAsync(userId);
+            if (user == null) return ApiResponse.NotFound();
+
+            if (user.TwoFactorEnabled)
+                return ApiResponse.Fail("2FA is already enabled.");
+
+            user.TwoFactorEnabled = true;
+            var ok = await _userService.UpdateUserAsync(user);
+            if (!ok) return ApiResponse.Fail("Failed to enable 2FA. Please try again.");
+
+            try { await _otpService.RemoveOtpAsync(email, "2fa"); } catch { }
+            return ApiResponse.Ok("Two-Factor Authentication has been enabled successfully.");
         }
-        public async Task<bool> AddTokenAsync(RefreshToken token)
+
+        public async Task<ApiResponse> Disable2FaAsync(string email, string currentPassword)
         {
-            var repo = _unitOfWork.Repository<RefreshToken>();
-            var tokenobj = await repo.AddAsync(token);
-            if (await _unitOfWork.CompleteAsync() > 0) return true;
+            var user = await _userService.GetByEmailAsync(email);
+            if (user == null) return ApiResponse.NotFound();
+            if (!user.TwoFactorEnabled) return ApiResponse.Fail("2FA is not enabled.");
+
+            // لازم الباسوورد + OTP معًا (أعلى أمان)
+            var passwordValid = await _userService.CheckPasswordAsync(user, currentPassword);
+            if (!passwordValid)
+                return ApiResponse.Fail("Invalid password.", "INVALID_PASSWORD");
+
+            user.TwoFactorEnabled = false;
+            var ok = await _userService.UpdateUserAsync(user);
+            if (!ok) return ApiResponse.Fail("Failed to disable Two-Factor.. Please try again.");
+
+            return ApiResponse.Ok(message: "Two-Factor Authentication disabled successfully.");
+        }
+        #endregion
+
+        #region refreshtoken
+        public async Task<RefreshTokenResult> RefreshTokenAsync(RefreshTokenRequest request)
+        {
+            var token = request.RefreshToken.Trim();
+
+            // 1. تحقق من الـ Refresh Token
+            var validation = await _refreshTokenService.ValidateRefreshTokenAsync(token);
+
+            if (!validation.IsValid)
+            {
+                return validation.Reason switch
+                {
+                    "EXPIRED" => RefreshTokenResult.InvalidOrExpired(),
+                    "REVOKED" => RefreshTokenResult.Revoked(),
+                    "NOT_FOUND" => RefreshTokenResult.InvalidOrExpired(),
+                    _ => RefreshTokenResult.InvalidOrExpired()
+                };
+            }
+
+            var userId = validation.UserId!;
+
+            // 2. جيب المستخدم
+            var user = await _userService.GetByIdAsync(userId);
+            if (user == null || !user.IsActive)
+            {
+                // نكدب ونبطل التوكن عشان الأمان
+                await _refreshTokenService.RevokeRefreshTokenAsync(token, "User not found or inactive");
+                return RefreshTokenResult.InvalidOrExpired();
+            }
+
+            // 4. توليد JWT جديد + Refresh Token جديد (Rotation + Reuse Detection)
+            var newJwt = await _jwtService.GenerateJwtTokenAsync(user);
+            var newRefreshToken = await _refreshTokenService.CreateRefreshTokenAsync(user.Id);
+
+            var roles = await _userService.GetRolesAsync(user);
+
+            // Revoke old refresh token
+            await _refreshTokenService.RevokeRefreshTokenAsync(token, "Token refreshed");
+            // 6. Log مهم جدًا للأمان
+            _logger?.LogInformation("Refresh token used successfully for user {UserId}",
+                user.Id);
+
+            return RefreshTokenResult.Successed(
+                auth: new AuthDetails { Token = newJwt, RefreshToken = newRefreshToken },
+                user: new UserDetails
+                {
+                    Id = user.Id,
+                    UserName = user.UserName,
+                    Email = user.Email,
+                    UserType = user.UserType,
+                    Roles = roles
+                }
+            );
+        }
+
+        /*public async Task<LoginResult> RefreshTokenAsync(string refreshToken)
+        {
+            var userId = await _refreshTokenService.ValidateRefreshTokenAsync(refreshToken);
+            if (userId == null)
+                return new LoginResult { Success = false, Message = "Invalid or expired refresh token." };
+
+            var user = await _userService.GetByIdAsync(userId);
+            if (user == null)
+                return new LoginResult { Success = false, Message = "User not found." };
+
+            var token = await _jwtService.GenerateJwtTokenAsync(user);
+            var newRefreshToken = await _refreshTokenService.CreateRefreshTokenAsync(user.Id);
+
+            var roles = await _userService.GetRolesAsync(user);
+
+            // Revoke old refresh token
+            await _refreshTokenService.RevokeRefreshTokenAsync(refreshToken, "Token refreshed");
+
+            return new LoginResult
+            {
+                Success = true,
+                Auth = new AuthDetails() { Token = token, RefreshToken = newRefreshToken },
+                User = new UserDetails() { Id = user.Id, UserName = user.UserName, Email = user.Email, UserType = user.UserType, Roles = roles }
+            };
+        }*/
+
+        #endregion
+
+        #region OTP
+        public async Task<ResendOtpResult> ResendOtpAsync(string email, string purpose)
+        {
+            if (string.IsNullOrWhiteSpace(email) || !new EmailAddressAttribute().IsValid(email))
+                return ResendOtpResult.InvalidEmail();
+
+            var user = await _userService.GetByEmailAsync(email);
+            if (user == null)
+                return ResendOtpResult.PrivacySafe(); // "If the email is registered, OTP has been sent"
+
+            var result = await _otpService.ResendOtpAsync(user.Id, email, purpose);
+
+            if (!result.Success)
+            {
+                return new ResendOtpResult
+                {
+                    Success = false,
+                    Message = result.Message,
+                    ErrorCode = result.ErrorCode // مثل: RESEND_COOLDOWN, TOO_MANY_RESENDS
+                };
+            }
+
+            return ResendOtpResult.Successed(result.ExpiresAtUtc, result.RemainingResends);
+        }
+        #endregion
+
+        public async Task<ApiResponse> ChangePasswordAsync(string userId, ChangePasswordDTO model)
+        {
             
-            return false;
-        }*/
-        #endregion
+            if (model is null) throw new ArgumentNullException(nameof(model));
+
+            // 1. User Validation (Moved from controller, but checks the ID passed by controller)
+            var user = await _userService.GetByIdAsync(userId);
+            if (user == null)
+                return ApiResponse.Fail("User not found.", "USER_NOT_FOUND");
+
+            var result = await _userService.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
+            if (!result.Succeeded)
+            {
+                var firstError = result.Errors.FirstOrDefault();
+                var errorCode = firstError?.Code switch
+                {
+                    "PasswordMismatch" => "CURRENT_PASSWORD_INCORRECT",
+                    "PasswordRequiresDigit" => "PASSWORD_REQUIRES_DIGIT",
+                    "PasswordRequiresLower" => "PASSWORD_REQUIRES_LOWERCASE",
+                    "PasswordRequiresUpper" => "PASSWORD_REQUIRES_UPPERCASE",
+                    "PasswordRequiresNonAlphanumeric" => "PASSWORD_REQUIRES_SPECIAL_CHAR",
+                    "PasswordTooShort" => "PASSWORD_TOO_SHORT",
+                    _ => "INVALID_PASSWORD"
+                };
+
+                return ApiResponse.Fail(firstError?.Description ?? "Password change failed.", errorCode);
+            }
+
+            return ApiResponse.Ok("Password changed successfully.");
+        }
     }
 }

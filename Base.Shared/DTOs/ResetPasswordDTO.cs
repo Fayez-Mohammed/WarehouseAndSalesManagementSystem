@@ -4,21 +4,13 @@ namespace Base.Shared.DTOs
 {
     public class ResetPasswordDTO
     {
-        [Required]
+        [Required, EmailAddress]
         public required string Email { get; set; }
         [Required]
         public required string Token { get; set; }
-        [Required]
+        [Required, MinLength(8)]
+        //[RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$",
+        //ErrorMessage = "Password must be at least 8 characters and contain uppercase, lowercase, number, and special character.")]
         public required string NewPassword { get; set; }
-    }
-
-    public class VerifyForgetPasswordDTO
-    {
-        [Required]
-        public required string Email { get; set; }
-        [Required]
-        public required string Otp { get; set; }
-        //[Required]
-        //public required string NewPassword { get; set; }
     }
 }
