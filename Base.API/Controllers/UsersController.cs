@@ -1,5 +1,6 @@
 ﻿using Base.Services.Interfaces;
 using Base.Shared.DTOs;
+using Base.Shared.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

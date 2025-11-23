@@ -79,15 +79,6 @@ namespace Base.DAL.Contexts
 
         #region DBSets
         public DbSet<UserProfile> UserProfiles { get; set; }
-        public DbSet<MedicalSpecialty> MedicalSpecialties { get; set; }
-        //public DbSet<UserType> UserTypes { get; set; }
-        public DbSet<ClincAdminProfile> ClincAdminProfiles { get; set; }
-        public DbSet<ClincDoctorProfile> ClincDoctorProfiles { get; set; }
-        public DbSet<ClincReceptionistProfile> ClincReceptionistProfiles { get; set; }
-        public DbSet<Clinic> Clinics { get; set; }
-        public DbSet<ClinicSchedule> ClinicSchedule { get; set; }
-        public DbSet<AppointmentSlot> AppointmentSlot { get; set; }
-        public DbSet<Appointment> Appointment { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<OtpEntry> OtpEntries { get; set; }
         public DbSet<BlacklistedToken> BlacklistedTokens { get; set; }

@@ -1,4 +1,5 @@
 ﻿using Base.Shared.DTOs;
+using Base.Shared.Enums;
 
 namespace Base.Services.Interfaces
 {

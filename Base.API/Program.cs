@@ -113,17 +113,6 @@ internal class Program
         // Cairo timezone
         var cairoTimeZone = TZConvert.GetTimeZoneInfo("Africa/Cairo");
 
-        // جدولة الـ Job اليومية
-        RecurringJob.AddOrUpdate<AppointmentSlotGeneratorJob>(
-            "GenerateAppointmentSlots",
-            job => job.GenerateMonthlySlotsAsync(),
-            "0 2 * * *", //"Mintues Hours DayInmonth Month DayInWeek"
-            new RecurringJobOptions
-            {
-                TimeZone = cairoTimeZone
-            }
-        );
-
         // 2) 💥 Job تنظيف الـ Blacklist (كل ساعة)
         RecurringJob.AddOrUpdate<CleanupBlacklistedTokensService>(
             "CleanupBlacklistedTokens",

@@ -1,5 +1,6 @@
 ﻿using Base.DAL.Models.SystemModels;
 using Base.Shared.DTOs;
+using Base.Shared.Enums;
 using Microsoft.AspNetCore.Identity;
 using System;
 using System.Collections.Generic;
@@ -18,9 +19,7 @@ namespace Base.DAL.Models.BaseModels
         public string? ImagePath { get; set; }
         public virtual UserProfile? Profile { get; set; }
         public virtual SystemAdminProfile? SystemAdminProfile { get; set; }
-        public virtual ClincAdminProfile? ClincAdminProfile { get; set; }
-        public virtual ClincDoctorProfile? ClincDoctorProfile { get; set; }
-        public virtual ClincReceptionistProfile? ClincReceptionistProfile { get; set; }
+        public virtual SchoolAdminProfile? SchoolAdminProfile { get; set; }
 
     }
 }

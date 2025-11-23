@@ -4,6 +4,7 @@ using Base.Repo.Interfaces;
 using Base.Services.Helpers;
 using Base.Services.Interfaces;
 using Base.Shared.DTOs;
+using Base.Shared.Enums;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using RepositoryProject.Specifications;

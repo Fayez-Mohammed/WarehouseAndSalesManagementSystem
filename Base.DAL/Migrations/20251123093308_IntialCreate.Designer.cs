@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Base.DAL.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251122102903_createIntial")]
-    partial class createIntial
+    [Migration("20251123093308_IntialCreate")]
+    partial class IntialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -227,187 +227,7 @@ namespace Base.DAL.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.Appointment", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("CreatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("DateOfCreattion")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DateOfUpdate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("PatientId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("SlotId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("UpdatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PatientId");
-
-                    b.HasIndex("SlotId")
-                        .IsUnique();
-
-                    b.ToTable("Appointment");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.AppointmentSlot", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("ClinicScheduleId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("CreatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DateOfCreattion")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DateOfUpdate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<TimeSpan>("EndTime")
-                        .HasColumnType("time");
-
-                    b.Property<bool>("IsBooked")
-                        .HasColumnType("bit");
-
-                    b.Property<TimeSpan>("StartTime")
-                        .HasColumnType("time");
-
-                    b.Property<string>("UpdatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClinicScheduleId");
-
-                    b.ToTable("AppointmentSlot");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.ClincAdminProfile", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("ClincId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("CreatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("DateOfCreattion")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DateOfUpdate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClincId");
-
-                    b.HasIndex("UserId")
-                        .IsUnique()
-                        .HasFilter("[UserId] IS NOT NULL");
-
-                    b.ToTable("ClincAdminProfiles");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.ClincDoctorProfile", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("ClincId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("CreatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("DateOfCreattion")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DateOfUpdate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClincId");
-
-                    b.HasIndex("UserId")
-                        .IsUnique()
-                        .HasFilter("[UserId] IS NOT NULL");
-
-                    b.ToTable("ClincDoctorProfiles");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.ClincReceptionistProfile", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("ClincId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("CreatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("DateOfCreattion")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DateOfUpdate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClincId");
-
-                    b.HasIndex("UserId")
-                        .IsUnique()
-                        .HasFilter("[UserId] IS NOT NULL");
-
-                    b.ToTable("ClincReceptionistProfiles");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.Clinic", b =>
+            modelBuilder.Entity("Base.DAL.Models.SystemModels.School", b =>
                 {
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(450)");
@@ -441,9 +261,6 @@ namespace Base.DAL.Migrations
                     b.Property<string>("LogoPath")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("MedicalSpecialtyId")
-                        .HasColumnType("nvarchar(450)");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -451,9 +268,6 @@ namespace Base.DAL.Migrations
 
                     b.Property<string>("Phone")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<double>("Price")
-                        .HasColumnType("float");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -465,57 +279,10 @@ namespace Base.DAL.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MedicalSpecialtyId");
-
-                    b.ToTable("Clinics");
+                    b.ToTable("School");
                 });
 
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.ClinicSchedule", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("ClinicId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("CreatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("DateOfCreattion")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("DateOfUpdate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("Day")
-                        .HasColumnType("int");
-
-                    b.Property<string>("DoctorId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<TimeSpan>("EndTime")
-                        .HasColumnType("time");
-
-                    b.Property<int>("SlotDurationMinutes")
-                        .HasColumnType("int");
-
-                    b.Property<TimeSpan>("StartTime")
-                        .HasColumnType("time");
-
-                    b.Property<string>("UpdatedById")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClinicId");
-
-                    b.HasIndex("DoctorId");
-
-                    b.ToTable("ClinicSchedule");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.MedicalSpecialty", b =>
+            modelBuilder.Entity("Base.DAL.Models.SystemModels.SchoolAdminProfile", b =>
                 {
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(450)");
@@ -529,20 +296,24 @@ namespace Base.DAL.Migrations
                     b.Property<DateTime>("DateOfUpdate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<string>("SchoolId")
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("UpdatedById")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("UserId")
+                        .HasColumnType("nvarchar(450)");
+
                     b.HasKey("Id");
 
-                    b.ToTable("MedicalSpecialties");
+                    b.HasIndex("SchoolId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasFilter("[UserId] IS NOT NULL");
+
+                    b.ToTable("SchoolAdminProfile");
                 });
 
             modelBuilder.Entity("Base.DAL.Models.SystemModels.SystemAdminProfile", b =>
@@ -601,6 +372,35 @@ namespace Base.DAL.Migrations
                         .HasFilter("[UserId] IS NOT NULL");
 
                     b.ToTable("UserProfiles");
+                });
+
+            modelBuilder.Entity("Base.Shared.Responses.BlacklistedToken", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CreatedById")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("DateOfCreattion")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateOfUpdate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UpdatedById")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BlacklistedTokens");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -756,111 +556,21 @@ namespace Base.DAL.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.Appointment", b =>
+            modelBuilder.Entity("Base.DAL.Models.SystemModels.SchoolAdminProfile", b =>
                 {
-                    b.HasOne("Base.DAL.Models.SystemModels.UserProfile", "Patient")
-                        .WithMany()
-                        .HasForeignKey("PatientId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("Base.DAL.Models.SystemModels.AppointmentSlot", "Slot")
-                        .WithOne("Appointment")
-                        .HasForeignKey("Base.DAL.Models.SystemModels.Appointment", "SlotId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Patient");
-
-                    b.Navigation("Slot");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.AppointmentSlot", b =>
-                {
-                    b.HasOne("Base.DAL.Models.SystemModels.ClinicSchedule", "DoctorSchedule")
-                        .WithMany("AppointmentSlots")
-                        .HasForeignKey("ClinicScheduleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("DoctorSchedule");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.ClincAdminProfile", b =>
-                {
-                    b.HasOne("Base.DAL.Models.SystemModels.Clinic", "Clinc")
-                        .WithMany("ClincAdmin")
-                        .HasForeignKey("ClincId")
+                    b.HasOne("Base.DAL.Models.SystemModels.School", "School")
+                        .WithMany("SchoolAdmin")
+                        .HasForeignKey("SchoolId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Base.DAL.Models.BaseModels.ApplicationUser", "User")
-                        .WithOne("ClincAdminProfile")
-                        .HasForeignKey("Base.DAL.Models.SystemModels.ClincAdminProfile", "UserId")
+                        .WithOne("SchoolAdminProfile")
+                        .HasForeignKey("Base.DAL.Models.SystemModels.SchoolAdminProfile", "UserId")
                         .OnDelete(DeleteBehavior.Cascade);
 
-                    b.Navigation("Clinc");
+                    b.Navigation("School");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.ClincDoctorProfile", b =>
-                {
-                    b.HasOne("Base.DAL.Models.SystemModels.Clinic", "Clinc")
-                        .WithMany("ClincDoctor")
-                        .HasForeignKey("ClincId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("Base.DAL.Models.BaseModels.ApplicationUser", "User")
-                        .WithOne("ClincDoctorProfile")
-                        .HasForeignKey("Base.DAL.Models.SystemModels.ClincDoctorProfile", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.Navigation("Clinc");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.ClincReceptionistProfile", b =>
-                {
-                    b.HasOne("Base.DAL.Models.SystemModels.Clinic", "Clinc")
-                        .WithMany("ClincReceptionis")
-                        .HasForeignKey("ClincId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("Base.DAL.Models.BaseModels.ApplicationUser", "User")
-                        .WithOne("ClincReceptionistProfile")
-                        .HasForeignKey("Base.DAL.Models.SystemModels.ClincReceptionistProfile", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.Navigation("Clinc");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.Clinic", b =>
-                {
-                    b.HasOne("Base.DAL.Models.SystemModels.MedicalSpecialty", "MedicalSpecialty")
-                        .WithMany()
-                        .HasForeignKey("MedicalSpecialtyId");
-
-                    b.Navigation("MedicalSpecialty");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.ClinicSchedule", b =>
-                {
-                    b.HasOne("Base.DAL.Models.SystemModels.Clinic", "Clinic")
-                        .WithMany("ClinicSchedules")
-                        .HasForeignKey("ClinicId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Base.DAL.Models.SystemModels.ClincDoctorProfile", "Doctor")
-                        .WithMany("Schedules")
-                        .HasForeignKey("DoctorId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Clinic");
-
-                    b.Navigation("Doctor");
                 });
 
             modelBuilder.Entity("Base.DAL.Models.SystemModels.SystemAdminProfile", b =>
@@ -936,41 +646,16 @@ namespace Base.DAL.Migrations
 
             modelBuilder.Entity("Base.DAL.Models.BaseModels.ApplicationUser", b =>
                 {
-                    b.Navigation("ClincAdminProfile");
-
-                    b.Navigation("ClincDoctorProfile");
-
-                    b.Navigation("ClincReceptionistProfile");
-
                     b.Navigation("Profile");
+
+                    b.Navigation("SchoolAdminProfile");
 
                     b.Navigation("SystemAdminProfile");
                 });
 
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.AppointmentSlot", b =>
+            modelBuilder.Entity("Base.DAL.Models.SystemModels.School", b =>
                 {
-                    b.Navigation("Appointment");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.ClincDoctorProfile", b =>
-                {
-                    b.Navigation("Schedules");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.Clinic", b =>
-                {
-                    b.Navigation("ClincAdmin");
-
-                    b.Navigation("ClincDoctor");
-
-                    b.Navigation("ClincReceptionis");
-
-                    b.Navigation("ClinicSchedules");
-                });
-
-            modelBuilder.Entity("Base.DAL.Models.SystemModels.ClinicSchedule", b =>
-                {
-                    b.Navigation("AppointmentSlots");
+                    b.Navigation("SchoolAdmin");
                 });
 #pragma warning restore 612, 618
         }

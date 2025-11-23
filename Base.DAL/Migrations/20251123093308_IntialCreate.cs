@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Base.DAL.Migrations
 {
     /// <inheritdoc />
-    public partial class createIntial : Migration
+    public partial class IntialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -55,12 +55,12 @@ namespace Base.DAL.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "MedicalSpecialties",
+                name: "BlacklistedTokens",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Token = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ExpiryDate = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     DateOfCreattion = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -68,7 +68,31 @@ namespace Base.DAL.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_MedicalSpecialties", x => x.Id);
+                    table.PrimaryKey("PK_BlacklistedTokens", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "School",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    AddressCountry = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AddressGovernRate = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AddressCity = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AddressLocation = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Phone = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    LogoPath = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    DateOfCreattion = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    DateOfUpdate = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_School", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -284,43 +308,12 @@ namespace Base.DAL.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Clinics",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    Email = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    AddressCountry = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    AddressGovernRate = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    AddressCity = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    AddressLocation = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Phone = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    Price = table.Column<double>(type: "float", nullable: false),
-                    LogoPath = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    MedicalSpecialtyId = table.Column<string>(type: "nvarchar(450)", nullable: true),
-                    CreatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfCreattion = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfUpdate = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Clinics", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Clinics_MedicalSpecialties_MedicalSpecialtyId",
-                        column: x => x.MedicalSpecialtyId,
-                        principalTable: "MedicalSpecialties",
-                        principalColumn: "Id");
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ClincAdminProfiles",
+                name: "SchoolAdminProfile",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     UserId = table.Column<string>(type: "nvarchar(450)", nullable: true),
-                    ClincId = table.Column<string>(type: "nvarchar(450)", nullable: true),
+                    SchoolId = table.Column<string>(type: "nvarchar(450)", nullable: true),
                     CreatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     DateOfCreattion = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -328,183 +321,20 @@ namespace Base.DAL.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_ClincAdminProfiles", x => x.Id);
+                    table.PrimaryKey("PK_SchoolAdminProfile", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ClincAdminProfiles_AspNetUsers_UserId",
+                        name: "FK_SchoolAdminProfile_AspNetUsers_UserId",
                         column: x => x.UserId,
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_ClincAdminProfiles_Clinics_ClincId",
-                        column: x => x.ClincId,
-                        principalTable: "Clinics",
+                        name: "FK_SchoolAdminProfile_School_SchoolId",
+                        column: x => x.SchoolId,
+                        principalTable: "School",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
                 });
-
-            migrationBuilder.CreateTable(
-                name: "ClincDoctorProfiles",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: true),
-                    ClincId = table.Column<string>(type: "nvarchar(450)", nullable: true),
-                    CreatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfCreattion = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfUpdate = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ClincDoctorProfiles", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ClincDoctorProfiles_AspNetUsers_UserId",
-                        column: x => x.UserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_ClincDoctorProfiles_Clinics_ClincId",
-                        column: x => x.ClincId,
-                        principalTable: "Clinics",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ClincReceptionistProfiles",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: true),
-                    ClincId = table.Column<string>(type: "nvarchar(450)", nullable: true),
-                    CreatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfCreattion = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfUpdate = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ClincReceptionistProfiles", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ClincReceptionistProfiles_AspNetUsers_UserId",
-                        column: x => x.UserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_ClincReceptionistProfiles_Clinics_ClincId",
-                        column: x => x.ClincId,
-                        principalTable: "Clinics",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ClinicSchedule",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    ClinicId = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    DoctorId = table.Column<string>(type: "nvarchar(450)", nullable: true),
-                    Day = table.Column<int>(type: "int", nullable: false),
-                    StartTime = table.Column<TimeSpan>(type: "time", nullable: false),
-                    EndTime = table.Column<TimeSpan>(type: "time", nullable: false),
-                    SlotDurationMinutes = table.Column<int>(type: "int", nullable: false),
-                    CreatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfCreattion = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfUpdate = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ClinicSchedule", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ClinicSchedule_ClincDoctorProfiles_DoctorId",
-                        column: x => x.DoctorId,
-                        principalTable: "ClincDoctorProfiles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
-                    table.ForeignKey(
-                        name: "FK_ClinicSchedule_Clinics_ClinicId",
-                        column: x => x.ClinicId,
-                        principalTable: "Clinics",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AppointmentSlot",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    ClinicScheduleId = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    StartTime = table.Column<TimeSpan>(type: "time", nullable: false),
-                    EndTime = table.Column<TimeSpan>(type: "time", nullable: false),
-                    IsBooked = table.Column<bool>(type: "bit", nullable: false),
-                    CreatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfCreattion = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfUpdate = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AppointmentSlot", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AppointmentSlot_ClinicSchedule_ClinicScheduleId",
-                        column: x => x.ClinicScheduleId,
-                        principalTable: "ClinicSchedule",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Appointment",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    SlotId = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    PatientId = table.Column<string>(type: "nvarchar(450)", nullable: true),
-                    Reason = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CreatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfCreattion = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedById = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DateOfUpdate = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Appointment", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Appointment_AppointmentSlot_SlotId",
-                        column: x => x.SlotId,
-                        principalTable: "AppointmentSlot",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Appointment_UserProfiles_PatientId",
-                        column: x => x.PatientId,
-                        principalTable: "UserProfiles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
-                });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Appointment_PatientId",
-                table: "Appointment",
-                column: "PatientId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Appointment_SlotId",
-                table: "Appointment",
-                column: "SlotId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AppointmentSlot_ClinicScheduleId",
-                table: "AppointmentSlot",
-                column: "ClinicScheduleId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AspNetRoleClaims_RoleId",
@@ -546,57 +376,6 @@ namespace Base.DAL.Migrations
                 filter: "[NormalizedUserName] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ClincAdminProfiles_ClincId",
-                table: "ClincAdminProfiles",
-                column: "ClincId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ClincAdminProfiles_UserId",
-                table: "ClincAdminProfiles",
-                column: "UserId",
-                unique: true,
-                filter: "[UserId] IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ClincDoctorProfiles_ClincId",
-                table: "ClincDoctorProfiles",
-                column: "ClincId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ClincDoctorProfiles_UserId",
-                table: "ClincDoctorProfiles",
-                column: "UserId",
-                unique: true,
-                filter: "[UserId] IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ClincReceptionistProfiles_ClincId",
-                table: "ClincReceptionistProfiles",
-                column: "ClincId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ClincReceptionistProfiles_UserId",
-                table: "ClincReceptionistProfiles",
-                column: "UserId",
-                unique: true,
-                filter: "[UserId] IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Clinics_MedicalSpecialtyId",
-                table: "Clinics",
-                column: "MedicalSpecialtyId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ClinicSchedule_ClinicId",
-                table: "ClinicSchedule",
-                column: "ClinicId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ClinicSchedule_DoctorId",
-                table: "ClinicSchedule",
-                column: "DoctorId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_OtpEntries_UserId",
                 table: "OtpEntries",
                 column: "UserId");
@@ -605,6 +384,18 @@ namespace Base.DAL.Migrations
                 name: "IX_RefreshTokens_UserId",
                 table: "RefreshTokens",
                 column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SchoolAdminProfile_SchoolId",
+                table: "SchoolAdminProfile",
+                column: "SchoolId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SchoolAdminProfile_UserId",
+                table: "SchoolAdminProfile",
+                column: "UserId",
+                unique: true,
+                filter: "[UserId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_SystemAdminProfile_UserId",
@@ -625,9 +416,6 @@ namespace Base.DAL.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "Appointment");
-
-            migrationBuilder.DropTable(
                 name: "AspNetRoleClaims");
 
             migrationBuilder.DropTable(
@@ -643,10 +431,7 @@ namespace Base.DAL.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
-                name: "ClincAdminProfiles");
-
-            migrationBuilder.DropTable(
-                name: "ClincReceptionistProfiles");
+                name: "BlacklistedTokens");
 
             migrationBuilder.DropTable(
                 name: "OtpEntries");
@@ -655,10 +440,10 @@ namespace Base.DAL.Migrations
                 name: "RefreshTokens");
 
             migrationBuilder.DropTable(
-                name: "SystemAdminProfile");
+                name: "SchoolAdminProfile");
 
             migrationBuilder.DropTable(
-                name: "AppointmentSlot");
+                name: "SystemAdminProfile");
 
             migrationBuilder.DropTable(
                 name: "UserProfiles");
@@ -667,19 +452,10 @@ namespace Base.DAL.Migrations
                 name: "AspNetRoles");
 
             migrationBuilder.DropTable(
-                name: "ClinicSchedule");
-
-            migrationBuilder.DropTable(
-                name: "ClincDoctorProfiles");
+                name: "School");
 
             migrationBuilder.DropTable(
                 name: "AspNetUsers");
-
-            migrationBuilder.DropTable(
-                name: "Clinics");
-
-            migrationBuilder.DropTable(
-                name: "MedicalSpecialties");
         }
     }
 }

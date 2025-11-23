@@ -1,4 +1,5 @@
 ﻿using Base.Shared.DTOs;
+using Base.Shared.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;

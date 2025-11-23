@@ -234,7 +234,6 @@ namespace Base.API.Services
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IUserProfileService, UserProfileService>();
             services.AddScoped<IAuthorizationHandler, ActiveUserHandler>();
-            services.AddScoped<IClinicServices, ClinicServices>();
             services.AddScoped<IUploadImageService, UploadImageService>();
 
             // -----------------------

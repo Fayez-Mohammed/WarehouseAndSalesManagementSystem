@@ -1,6 +1,7 @@
 ﻿using Base.DAL.Models.BaseModels;
 using Base.DAL.Models.SystemModels;
 using Base.Shared.DTOs;
+using Base.Shared.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System;
@@ -31,17 +32,9 @@ namespace Base.DAL.Config.BaseConfig
                    .WithOne(p => p.User)
                    .HasForeignKey<SystemAdminProfile>(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
 
-            builder.HasOne(u => u.ClincAdminProfile)
+            builder.HasOne(u => u.SchoolAdminProfile)
                    .WithOne(p => p.User)
-                   .HasForeignKey<ClincAdminProfile>(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
-
-            builder.HasOne(u => u.ClincDoctorProfile)
-                   .WithOne(p => p.User)
-                   .HasForeignKey<ClincDoctorProfile>(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
-
-            builder.HasOne(u => u.ClincReceptionistProfile)
-                   .WithOne(p => p.User)
-                   .HasForeignKey<ClincReceptionistProfile>(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
+                   .HasForeignKey<SchoolAdminProfile>(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
 
         }
     }

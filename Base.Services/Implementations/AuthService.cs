@@ -5,6 +5,7 @@ using Base.Repo.Interfaces;
 using Base.Services.Helpers;
 using Base.Services.Interfaces;
 using Base.Shared.DTOs;
+using Base.Shared.Enums;
 using Base.Shared.Responses;
 using Base.Shared.Responses.Exceptions;
 using Microsoft.AspNetCore.Http;

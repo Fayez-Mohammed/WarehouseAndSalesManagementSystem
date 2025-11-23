@@ -4,9 +4,9 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Base.DAL.Config.SystemConfig
 {
-    public class ClincReceptionistProfileConfigurations : BaseEntityConfigurations<ClincReceptionistProfile>
+    public class SchoolAdminProfileConfigurations : BaseEntityConfigurations<SchoolAdminProfile>
     {
-        public override void Configure(EntityTypeBuilder<ClincReceptionistProfile> builder)
+        public override void Configure(EntityTypeBuilder<SchoolAdminProfile> builder)
         {
             base.Configure(builder);
             /*builder.HasOne(p => p.User)
