@@ -301,7 +301,7 @@ namespace Base.API.Services
             {
                 options.SwaggerDoc("v1", new OpenApiInfo
                 {
-                    Title = "Health Care",
+                    Title = "Smart Warehouse & Sales Management System",
                     Version = "v1",
                     Description = "API documentation with unified response format"
                 });

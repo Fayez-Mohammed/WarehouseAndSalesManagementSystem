@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using TimeZoneConverter;
+using Base.API.Controllers;
 internal class Program
 {
     private static async Task Main(string[] args)
@@ -31,6 +32,10 @@ internal class Program
         // 💡 إضافة خدمات التحكم في الوصول عبر الأصول (CORS)
         // 💡 إضافة خدمات الهوية
         builder.Services.AddApplicationServices(builder.Configuration);
+
+        builder.Services.AddEndpointsApiExplorer();
+
+        builder.Services.AddSwaggerGen();
 
 
         var app = builder.Build();
@@ -64,11 +69,22 @@ internal class Program
         }
         #endregion
         // 💡 تكوين الـ Middleware في الـ HTTP Request Pipeline
-        if (app.Environment.IsDevelopment())
+        //  if (app.Environment.IsDevelopment())
+        //   {
+        app.UseSwagger();
+        // Inside Program.cs, after app.UseSwagger();
+
+        app.UseSwaggerUI(options =>
         {
-            app.UseSwagger();
-            app.UseSwaggerUI();
-        }
+            // 1. Set the root path for the UI (so the swagger page opens at the root)
+            options.RoutePrefix = string.Empty;
+
+            // 2. CRITICAL: Explicitly set the location of the swagger.json file.
+            // The default endpoint path is usually '/swagger/v1/swagger.json'.
+            // Your error is looking for '/v1/swagger.json' which is wrong.
+            options.SwaggerEndpoint("/swagger/v1/swagger.json", "EduGate API V1");
+        });
+        //  }
         app.UseMiddleware<TokenBlacklistMiddleware>();
 
         app.UseStaticFiles();
@@ -100,7 +116,7 @@ internal class Program
 
 
 
-        
+
 
         // 💡 تعيين الخرائط للمتحكمات
         app.MapControllers();
@@ -128,8 +144,9 @@ internal class Program
         {
             throw new NotFoundException("The requested endpoint does not exist.");
         });
+
         // Hangfire dashboard
-     
+
         app.Run();
     }
 }

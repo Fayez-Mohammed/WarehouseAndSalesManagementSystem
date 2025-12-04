@@ -466,8 +466,9 @@ namespace Base.Tests.Services
 
             Assert.Contains("This email is already registered.", ex.Message);
             _userManagerMock.Verify(x => x.CreateAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()), Times.Never);
-        }*/
-        #endregion
+        }
+#endregion
+        
 
         #region SendOtpAsync Tests
         [Fact]
