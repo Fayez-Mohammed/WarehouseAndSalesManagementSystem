@@ -34,6 +34,14 @@ namespace Base.Repo.Implementations
                 query = query.OrderByDescending(specification.OrderByDescending);
             }
 
+            if (specification.Includes.Any())
+            {
+                foreach (var specificationInclude in specification.Includes)
+                {
+                    query.Include(specificationInclude);
+                }
+            }
+
             // 4. 🟢 التصفح (Paging) - وقائي: نتحقق من تفعيل التصفح
             if (specification.IsPagingEnabled)
             {

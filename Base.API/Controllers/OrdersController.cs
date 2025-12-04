@@ -3,16 +3,11 @@ using Base.DAL.Models.BaseModels;
 using Base.DAL.Models.SystemModels;
 using Base.DAL.Models.SystemModels.Enums;
 using Base.Repo.Interfaces;
-using Base.Shared.DTOs;
-using Base.Shared.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using RepositoryProject.Specifications;
-using System;
-using System.Collections.Generic;
 using System.Security.Claims;
-using System.Threading.Tasks;
 
 namespace Base.API.Controllers
 {
