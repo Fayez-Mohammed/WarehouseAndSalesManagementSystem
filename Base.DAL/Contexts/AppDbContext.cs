@@ -104,6 +104,7 @@ namespace Base.DAL.Contexts
         public DbSet<OrderItem> OrderItems { get; set; }
         public DbSet<StockTransaction> StockTransactions { get; set; }
         public DbSet<Invoice> Invoices { get; set; }
+        public DbSet<Inventory> Inventories { get; set; }
         #endregion
     }
 }
