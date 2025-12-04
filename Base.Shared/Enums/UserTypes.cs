@@ -8,10 +8,11 @@ namespace Base.Shared.Enums
 {
     public enum UserTypes
     {
-        SchoolTeacher,
-        SchoolReceptionist,
-        SchoolAdmin,
+      
         SystemAdmin,
-        User
+        User,
+        Customer,
+        SalesRep,
+        StoreManager,
     }
 }

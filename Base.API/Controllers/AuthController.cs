@@ -1,5 +1,6 @@
 ﻿using Azure.Core;
 using Base.API.DTOs;
+using Base.DAL.Models.BaseModels;
 using Base.Services.Implementations;
 using Base.Services.Interfaces;
 using Base.Shared.DTOs;
@@ -33,13 +34,32 @@ namespace Base.API.Controllers
         private readonly IAuthService _authService;
         private readonly IUserProfileService _userProfile;
         private readonly ILogger<AuthController> _logger;
+        private readonly UserManager<ApplicationUser> _userManager;
 
-        public AuthController(IAuthService authService, ILogger<AuthController> logger)
+        public AuthController(IAuthService authService, ILogger<AuthController> logger, UserManager<ApplicationUser> userManager)
         {
             _authService = authService;
             _logger = logger;
+            _userManager = userManager;
         }
+        [HttpPost("ForceResetPassword")]
+        public async Task<IActionResult> ForceResetPassword([FromQuery] string email, [FromQuery] string newPassword)
+        {
+            // 1. Find the user
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null) return NotFound("User not found");
 
+            // 2. Generate a reset token (bypassing email check for dev)
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+
+            // 3. Reset the password using the manager
+            var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+
+            if (!result.Succeeded)
+                return BadRequest(result.Errors);
+
+            return Ok(new { Message = $"Password for {email} has been reset to: {newPassword}" });
+        }
         #region Login
         /// <summary>
         /// Authenticates a user and generates authentication tokens if successful.
