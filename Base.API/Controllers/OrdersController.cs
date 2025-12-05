@@ -24,8 +24,30 @@ namespace Base.API.Controllers
             this.unitOfWork = unitOfWork;
             this.userManager = userManager;
         }
+       
+       
+        [HttpGet("GetAllPendingOrdersForSalesRepoToConfirmLater")]
+        [Authorize(Roles = "SalesRep")]
+        public async Task<IActionResult> GetAllPendingOrdersForSalesRepoToConfirmLater()
+        {
+            var salesRepId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var repo= unitOfWork.Repository<Order>();
+            var spec = new BaseSpecification<Order>(o => o.Status == OrderStatus.Pending && o.SalesRepId == salesRepId);
 
-
+            var pendingOrders = await repo.ListAsync(spec);
+            var pendingOrdersDto = pendingOrders.Select(o => new
+            {
+                o.Id,
+                o.TotalAmount,
+                o.CommissionAmount,
+                o.Status,
+                o.CustomerId,
+                o.SalesRepId,
+                o.DateOfCreation
+            });
+            return Ok(pendingOrdersDto);
+        }
+        
         /// <summary>
         /// Creates a new order for the logged-in customer.
         /// Status defaults to 'Pending'.
@@ -81,8 +103,8 @@ namespace Base.API.Controllers
                 Status = OrderStatus.Pending, // Default Status
                 OrderItems = orderItems,      // EF Core will insert these automatically
                 SalesRepId = dto.SalesRepId,   // Optional, can be null
-                // CommissionAmount is calculated later by Sales Rep
-            };
+                CommissionAmount=0.1m*totalAmount
+             };
 
             // 4. Save to Database
             await unitOfWork.Repository<Order>().AddAsync(order);
@@ -93,17 +115,15 @@ namespace Base.API.Controllers
 
             return Ok(new { Message = "Order created successfully", OrderId = order.Id });
         }
-        // ... (Keep CreateOrder and ConfirmOrder as they were) ...
 
-        // =================================================================
-        // FIXED: ApproveOrder (Removed TransactionDate)
-        // =================================================================
+        
+      
         /// <summary>
         /// Approves an order, deducts stock, and generates invoices.
         /// </summary>
         /// <param name="orderId"></param>
         /// <returns></returns>
-        [HttpPut("ApproveOrder")]
+        [HttpPut("ApproveOrderByStoreManager")]
         [Authorize(Roles = "StoreManager")]
         public async Task<IActionResult> ApproveOrder([FromQuery] string orderId)
         {
@@ -189,5 +209,29 @@ namespace Base.API.Controllers
 
             return Ok(new { Message = "Order Approved and Stock Deducted" });
         }
-    }
+        [HttpPut("ApproveOrderBySalesRep")]
+        [Authorize(Roles = "SalesRep")]
+        public async Task<IActionResult> ConfirmOrder([FromQuery] string orderId)
+        {
+            var salesRepId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            // 1. Get Order
+            var order = await unitOfWork.Repository<Order>().GetByIdAsync(orderId);
+            if (order == null) return NotFound("Order not found");
+            if (order.Status != OrderStatus.Pending)
+                return BadRequest("Only Pending orders can be confirmed.");
+            // 2. Calculate Commission (e.g., 10% of TotalAmount)
+            
+            decimal commissionRate = 0.10m; // 10%
+            order.CommissionAmount = order.TotalAmount * commissionRate;
+            order.Status = OrderStatus.Confirmed;
+            order.SalesRepId = salesRepId;
+            await unitOfWork.Repository<Order>().UpdateAsync(order);
+            var result = await unitOfWork.CompleteAsync();
+            if (result <= 0)
+                return StatusCode(500, "Failed to confirm order.");
+            return Ok(new { Message = $"Order With ID= [{order.Id}] confirmed by Sales Rep", CommissionAmount = order.CommissionAmount });
+        }
+
+
+        }
 }
