@@ -1,19 +1,17 @@
-﻿using System.Linq.Expressions;
-using Base.API.DTOs;
+﻿using Base.API.DTOs;
 using Base.DAL.Models.SystemModels;
 using Base.Repo.Interfaces;
 using Base.Repo.Specifications;
 using BaseAPI.Validation.ProductValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
 using RepositoryProject.Specifications;
 
 namespace Base.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize]
+//[Authorize]
 public class InventoryController(IUnitOfWork unit 
    , ProductDtoValidation productValidator
    ,ProductUpdateDtoValidation productUpdateValidator
@@ -25,25 +23,26 @@ public class InventoryController(IUnitOfWork unit
    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
    [ProducesResponseType(StatusCodes.Status404NotFound)]
    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-   public async Task<IActionResult> GetAll( ISpecification<Inventory> spec )
+   public async Task<IActionResult> GetAll([FromQuery] int skip , [FromQuery] int take)
    {  
-      if (spec.Skip < 1 || spec.Take > 100 || spec.Take < 1)
-       return BadRequest();
+       
       try
       {
-         spec.Includes.Add(x => x.Products);
+         var spec = new BaseSpecification<Inventory>();
+         spec.Includes.Add(i => i.Products);
+         spec.ApplyPaging(skip,take);
          
          var inventory = await unit
             .Repository<Inventory>()
             .ListAsync(spec);
          var list =
             inventory
-               .Select(x => new { List = x.Products, SalesPersonId = x.SalesPersonId })
+               .Select(x => new { List = x.Products, SalesPersonId = x.InventoryManagerId })
                .FirstOrDefault();
          
          var response =
             list?.List
-            .Select(a => new ProductDto
+            .Select(a => new ProductReturnDto
             {
                ProductId = a.Id
                ,ProductName = a.Name,
@@ -82,7 +81,7 @@ public class InventoryController(IUnitOfWork unit
          if (string.IsNullOrEmpty(product.Id) || string.IsNullOrEmpty(product.Name))
             return NotFound();
 
-         var response = new ProductDto()
+         var response = new ProductReturnDto()
          {
             ProductId = product.Id,
             ProductName = product.Name,
@@ -103,19 +102,19 @@ public class InventoryController(IUnitOfWork unit
    [ProducesResponseType(StatusCodes.Status200OK)]
    [ProducesResponseType(StatusCodes.Status400BadRequest)]
    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-   public async Task<IActionResult> CreateProduct([FromBody] ProductDto productDto)
+   public async Task<IActionResult> CreateProduct([FromBody] ProductCreateDto productCreateDto)
    {
-      var validate = await productValidator.ValidateAsync(productDto);
+      var validate = await productValidator.ValidateAsync(productCreateDto);
       if (!validate.IsValid)
          return BadRequest(new  ApiResponseDTO {Message = "Invalid Input parameters"});
       try
       {
          var product = new Product()
          {
-             Name = productDto.ProductName,
-             SKU = productDto.SKU,
-             Description = productDto.Description,
-             CurrentStockQuantity = productDto.Quantity,
+             Name = productCreateDto.ProductName,
+             SKU = productCreateDto.SKU,
+             Description = productCreateDto.Description,
+             CurrentStockQuantity = productCreateDto.Quantity,
          };
 
          await unit.Repository<Product>().AddAsync(product);
@@ -166,7 +165,7 @@ public class InventoryController(IUnitOfWork unit
    }
 
    [HttpDelete("products/{id}")]
-   [ProducesResponseType(StatusCodes.Status200OK)]
+   [ProducesResponseType(StatusCodes.Status204NoContent)]
    [ProducesResponseType(StatusCodes.Status400BadRequest)]
    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
    public async Task<IActionResult> DeleteProduct([FromRoute] string id)
@@ -196,7 +195,7 @@ public class InventoryController(IUnitOfWork unit
    }
 
    [HttpPost("products/stock/in")]
-   [ProducesResponseType(StatusCodes.Status200OK)]
+   [ProducesResponseType(StatusCodes.Status204NoContent)]
    [ProducesResponseType(StatusCodes.Status400BadRequest)]
    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
    [ProducesResponseType(StatusCodes.Status404NotFound)]

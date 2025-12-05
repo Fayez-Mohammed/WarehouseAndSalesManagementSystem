@@ -3,14 +3,16 @@ using FluentValidation;
 
 namespace BaseAPI.Validation.ProductValidation;
 
-public class ProductDtoValidation : AbstractValidator<ProductDto>
+public class ProductDtoValidation : AbstractValidator<ProductCreateDto>
 {
 
   public ProductDtoValidation()
   {
     RuleFor(x => x.Quantity)
       .GreaterThan(0);
-    RuleFor(x => x.Price)
+    RuleFor(x => x.SellPrice)
+      .GreaterThan(0);
+    RuleFor(x => x.BuyPrice)
       .GreaterThan(0);
     RuleFor(x => x.ProductName)
       .NotEmpty();

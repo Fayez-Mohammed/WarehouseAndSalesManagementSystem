@@ -8,7 +8,7 @@ public class Inventory : BaseEntity
    
      
     
-    public string? SalesPersonId { get; set; }
+    public string? InventoryManagerId { get; set; }
     
     
     
