@@ -2,21 +2,21 @@
 
 namespace Base.API.DTOs;
 
-public class ProductUpdateDto
-{
+public class ProductCreateDto
+{ 
     [Required]
-    [Key]
-    public string? ProductId { get; set; }
-    [MaxLength(200)]
+    [MaxLength(100)]
     public string? ProductName { get; set; }
+    [Required]
     [Range(0.1, double.MaxValue)]
     public decimal SellPrice { get; set; }
-    [Range(0, double.MaxValue)]
-    public int Quantity { get; set; }
-    [MaxLength(200)]
-    public string? SKU  { get; set; }
-    [MaxLength(200)]
-    public string? Description { get; set; }
     [Range(0.1, double.MaxValue)]
     public decimal BuyPrice { get; set; }
+    [Required]
+    [Range(0.1, int.MaxValue)]
+    public int Quantity { get; set; }
+    [MaxLength(100)]
+    public string? SKU  { get; set; }
+    public string? Description { get; set; }
+    
 }
